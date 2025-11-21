@@ -103,20 +103,41 @@ export class AuthService {
     return modulos
       .map((mod) => ({
         ...mod,
-        rutas: mod.rutas.filter(
-          (r) =>
-            r.estado &&
-            r.permisos.some(
-              (p) =>
-                p.estado &&
-                p.roles.some(
-                  (rp) =>
-                    rp.rol.id === rolId &&
-                    rp.valor === true &&
-                    rp.rol.estado === true,
-                ),
-            ),
-        ),
+        rutas: mod.rutas
+          .filter(
+            (r) =>
+              r.estado &&
+              r.permisos.some(
+                (p) =>
+                  p.estado &&
+                  p.roles.some(
+                    (rp) =>
+                      rp.rol.id === rolId &&
+                      rp.valor === true &&
+                      rp.rol.estado === true,
+                  ),
+              ),
+          )
+          .map((r) => ({
+            ...r,
+            permisos: r.permisos
+              .filter(
+                (p) =>
+                  p.estado &&
+                  p.roles.some(
+                    (rp) =>
+                      rp.rol.id === rolId &&
+                      rp.valor === true &&
+                      rp.rol.estado === true,
+                  ),
+              )
+              .map((p) => ({
+                id: p.id,
+                nombre: p.nombre,
+                descripcion: p.descripcion,
+                tipo: p.tipo,
+              })),
+          })),
       }))
       .filter((mod) => mod.rutas.length > 0);
   }

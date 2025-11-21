@@ -17,7 +17,7 @@ export class AuthController {
     @Get('getpermisos')
     @UseGuards(AuthGuard('jwt'))
     async refetchPermisos(@Request() req: any){
-        const rolId: number | undefined = req.user.rol;
+        const rolId: number | undefined = req.user.rolId;
         
     if (!rolId) {
         throw new HttpException(
