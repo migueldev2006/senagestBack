@@ -28,6 +28,9 @@ export class Permiso {
   })
   tipo: TipoPermiso;
 
+  @Column()
+  rutaId: number;
+
   @ManyToOne(() => RutaFront, (ruta) => ruta.permisos, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',

@@ -36,11 +36,7 @@ console.log('PASSWORD:', process.env.PASSWORD);
       synchronize:true,
       // dropSchema:true
     }),
-    
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
-      serveRoot: '/uploads',
-    }),
+
     AuthModule,
     UsuariosModule,
     ModulosModule,
