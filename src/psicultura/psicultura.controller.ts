@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Param } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Param, Get } from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
 import { TimerDto, ValidarBrokerDto } from './dto';
 
@@ -6,6 +6,10 @@ import { TimerDto, ValidarBrokerDto } from './dto';
 @Controller('psicultura')
 export class PsiculturaController {
   constructor(private readonly psiculturaService: PsiculturaService) {}
+  @Get('estado/:id')
+  obtenerEstado(@Param('id') id: number) {
+    return this.psiculturaService.obtenerEstado(id);
+  }
 
   @Post('validar')
   validarBroker(@Body() dto: ValidarBrokerDto) {
