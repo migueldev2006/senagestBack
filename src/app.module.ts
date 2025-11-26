@@ -12,6 +12,7 @@ import { RutasModule } from './rutas/rutas.module';
 import { ConfigModule } from '@nestjs/config';
 import { FichasModule } from './fichas/fichas.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PsiculturaModule } from './psicultura/psicultura.module';
 
 console.log('🚀 Variables de entorno:');
 console.log('HOST:', process.env.HOST);
@@ -46,6 +47,7 @@ console.log('PASSWORD:', process.env.PASSWORD);
     RolpermisoModule,
     RutasModule,
     FichasModule,
+    PsiculturaModule,
   ],
 })
 export class AppModule {}

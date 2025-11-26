@@ -1,3 +1,4 @@
+import { Psicultura } from '../../psicultura/entities/psicultura.entity';
 import { Ficha } from '../../fichas/entities/ficha.entity';
 import { Rol } from '../../roles/entities/rol.entity';
 import {
@@ -6,6 +7,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('usuario')
@@ -14,7 +16,7 @@ export class Usuario {
   id: number;
 
   @Column({ type: 'bigint', unique: true })
-  identificacion: string; 
+  identificacion: string;
 
   @Column({ type: 'varchar', length: 20 })
   primerNombre: string;
@@ -58,4 +60,7 @@ export class Usuario {
 
   @Column({ type: 'boolean', default: true })
   estado: boolean;
+
+  @OneToMany(() => Psicultura, (psicultura) => psicultura.usuarios)
+  psiculturas: Psicultura[];
 }
