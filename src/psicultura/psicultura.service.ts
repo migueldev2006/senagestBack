@@ -43,14 +43,30 @@ export class PsiculturaService implements OnModuleInit {
   }
 
   async actualizarTimer(id: number, dto: TimerDto) {
-    const registro = await this.psiculturaRepo.findOne({ where: { id } });
-    if (!registro) throw new HttpException('Registro no encontrado', 404);
-    registro.TiempoEncendido = dto.TiempoEncendido;
-    registro.tiempoApagado = dto.tiempoApagado;
-    await this.psiculturaRepo.save(registro);
-    this.iniciarCicloAutomatico(id);
-    return { ok: true, message: 'Timer actualizado y ciclo reiniciado' };
+  const registro = await this.psiculturaRepo.findOne({ where: { id } });
+  if (!registro) throw new HttpException('Registro no encontrado', 404);
+
+  if (this.ciclos[id]) {
+    clearTimeout(this.ciclos[id]);
+    delete this.ciclos[id];
   }
+
+  const nuevo = this.psiculturaRepo.create({
+    url: registro.url,
+    usuario: registro.usuario,
+    contrasena: registro.contrasena,
+    TiempoEncendido: dto.TiempoEncendido,
+    tiempoApagado: dto.tiempoApagado,
+    estado: false
+  });
+
+  const guardado = await this.psiculturaRepo.save(nuevo);
+
+  this.iniciarCicloAutomatico(guardado.id);
+
+  return { ok: true, message: 'Nuevo timer creado y ciclo iniciado', id: guardado.id };
+}
+
 
   async iniciarCicloAutomatico(id: number) {
     console.log('🚀 Iniciando ciclo automático de', id);
@@ -89,18 +105,20 @@ async obtenerEstado(id: number) {
   return { estado: registro.estado };
 }
 
-  async cambiarEstado(id: number, estado: boolean, manual = false) {
-    const registro = await this.psiculturaRepo.findOne({ where: { id } });
-    if (!registro) throw new HttpException('Registro no encontrado', 404);
-    registro.estado = estado;
-    await this.psiculturaRepo.save(registro);
+async cambiarEstado(id: number, estado: boolean, manual = false) {
+  const registro = await this.psiculturaRepo.findOne({ where: { id } });
+  if (!registro) throw new HttpException('Registro no encontrado', 404);
 
-    if (manual) {
-      if (this.ciclos[id]) clearTimeout(this.ciclos[id]);
-      delete this.ciclos[id];
-      this.iniciarCicloAutomatico(id); // reinicia ciclo automático si cambio manual
-    }
+  registro.estado = estado;
+  await this.psiculturaRepo.save(registro);
 
-    return registro.estado;
+  if (manual) {
+    if (this.ciclos[id]) clearTimeout(this.ciclos[id]);
+    delete this.ciclos[id];
+    this.iniciarCicloAutomatico(id);
   }
+
+  return registro.estado;
+}
+
 }
