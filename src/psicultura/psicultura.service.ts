@@ -14,6 +14,10 @@ export class PsiculturaService implements OnModuleInit {
     private readonly psiculturaRepo: Repository<Psicultura>,
   ) {}
 
+  async getPsiculturaInfo(){
+    return await this.psiculturaRepo.find()
+  }
+
   async onModuleInit() {
     const registros = await this.psiculturaRepo.find();
     for (const item of registros) this.iniciarCicloAutomatico(item.id);
@@ -90,12 +94,13 @@ async obtenerEstado(id: number) {
     if (!registro) throw new HttpException('Registro no encontrado', 404);
     registro.estado = estado;
     await this.psiculturaRepo.save(registro);
+
     if (manual) {
-      if (this.ciclos[id]) {
-        clearTimeout(this.ciclos[id]);
-        delete this.ciclos[id];
-      }
+      if (this.ciclos[id]) clearTimeout(this.ciclos[id]);
+      delete this.ciclos[id];
+      this.iniciarCicloAutomatico(id); // reinicia ciclo automático si cambio manual
     }
-    return { ok: true, estado };
+
+    return registro.estado;
   }
 }

@@ -6,6 +6,10 @@ import { TimerDto, ValidarBrokerDto } from './dto';
 @Controller('psicultura')
 export class PsiculturaController {
   constructor(private readonly psiculturaService: PsiculturaService) {}
+  @Get('info')
+  getPsiculturaInfo() {
+    return this.psiculturaService.getPsiculturaInfo();
+  }
   @Get('estado/:id')
   obtenerEstado(@Param('id') id: number) {
     return this.psiculturaService.obtenerEstado(id);
