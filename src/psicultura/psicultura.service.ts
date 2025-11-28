@@ -153,7 +153,7 @@ async cambiarEstado(id: number, estado: boolean, manual = false) {
   const registro = await this.psiculturaRepo.findOne({ where: { id } });
   if (!registro) throw new HttpException('Registro no encontrado', 404);
 
-  // 1. Detener ciclos automáticos si existían
+  // Detener ciclos automáticos si existían
   if (this.ciclos[id]) {
     const val = this.ciclos[id];
     if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
@@ -161,43 +161,38 @@ async cambiarEstado(id: number, estado: boolean, manual = false) {
     delete this.ciclos[id];
   }
 
-  // 2. Registrar cambio de estado
   const ahora = new Date();
 
-  if (estado) {
-    registro.estado = true;
-    registro.estadoActual = manual ? 'manual' : 'automatico';
-    registro.ultimaActivacion = ahora;
+if (manual) {
+  const nuevoRegistro = this.psiculturaRepo.create({
+    url: registro.url,
+    usuario: registro.usuario,
+    contrasena: registro.contrasena,
+    tiempoEncendido: registro.tiempoEncendido,
+    tiempoApagado: registro.tiempoApagado,
+    modo: 'manual',
+    estado: estado,
+    estadoActual: 'manual',
+    ultimaActivacion: estado ? new Date() : undefined,
+    ultimaDesactivacion: estado ? undefined : new Date(),
+    conexionBroker: registro.conexionBroker,
+    energiaEstable: registro.energiaEstable
+  });
 
-    // ---- INICIO DE CRONOMETRAJE MANUAL ----
-    if (manual) {
-      this.manualTimers[id] = { inicio: ahora };
-      console.log(`[MANUAL] Inicio de activación manual: ${ahora}`);
-    }
+  const guardado = await this.psiculturaRepo.save(nuevoRegistro);
+  if (estado) this.manualTimers[guardado.id] = { inicio: new Date() };
 
-  } else {
-    registro.estado = false;
-    registro.estadoActual = manual ? 'manual' : 'automatico';
-    registro.ultimaDesactivacion = ahora;
+  return { ok: true, message: 'Nuevo registro manual creado', id: guardado.id };
+}
 
-    // ---- FIN DE CRONOMETRAJE MANUAL ----
-    if (manual && this.manualTimers[id]?.inicio) {
-      const inicio = this.manualTimers[id].inicio;
-      const fin = ahora;
-
-      const duracionMs = fin.getTime() - inicio.getTime();
-      const duracionSeg = Math.floor(duracionMs / 1000);
-
-      console.log(`[MANUAL] Duración del estado manual ON: ${duracionSeg} segundos`);
-
-      // Aquí puedes GUARDAR LA DURACIÓN en BD si quieres
-      delete this.manualTimers[id];
-    }
-  }
+  // Modo automático
+  registro.estado = estado;
+  registro.estadoActual = 'automatico';
+  if (estado) registro.ultimaActivacion = ahora;
+  else registro.ultimaDesactivacion = ahora;
 
   await this.psiculturaRepo.save(registro);
-
-  console.log(`estado ${registro.estado}`);
+  console.log(`[AUTO] Estado actualizado para ID: ${registro.id}`);
 
   return { estado: registro.estado, estadoActual: registro.estadoActual };
 }
