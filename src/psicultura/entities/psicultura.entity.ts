@@ -6,20 +6,53 @@ export class Psicultura {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'varchar', length: 20, })
-  url?: string;
+  @Column({ type: 'varchar', length: 20 })
+  url: string;
 
   @Column({ type: 'varchar', length: 20 })
-  usuario?: string;
+  usuario: string;
 
   @Column({ type: 'varchar', length: 20 })
-  contrasena?: string;
+  contrasena: string;
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })
-  TiempoEncendido?: string;
+  tiempoEncendido: string;
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })
-  tiempoApagado?: string;
+  tiempoApagado: string;
+
+  @Column({ type: 'boolean', default: false })
+  estado: boolean;
+
+  @Column({ type: 'varchar', length: 20, default: 'inactivo' })
+  estadoActual: string;
+
+  @Column({ type: 'varchar', length: 10, default: 'auto' })
+  modo: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  ultimaActivacion: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  ultimaDesactivacion: Date;
+
+  @Column({ type: 'boolean', default: true })
+  conexionBroker: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaFalloConexion: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaRestablecidaConexion: Date;
+
+  @Column({ type: 'boolean', default: true })
+  energiaEstable: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaFalloEnergia: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaRestablecidaEnergia: Date;
 
   @ManyToOne(() => Usuario, (usuario) => usuario.rol)
   usuarios: Usuario;
@@ -30,10 +63,7 @@ export class Psicultura {
   @Column({
     type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
-    onUpdate: 'CURRENT_TIMESTAMP',
+    onUpdate: 'CURRENT_TIMESTAMP'
   })
   fechaActualizacion: Date;
-
-  @Column({ type: 'boolean' })
-  estado?: boolean;
 }

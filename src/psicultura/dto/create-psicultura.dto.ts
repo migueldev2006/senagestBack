@@ -19,7 +19,7 @@ export class CreatePsiculturaDto {
   tiempoApagado?: string
 
   @IsNumber()
-  usuarios: number
+  usuarioId: number
 
   @IsOptional()
   @IsBoolean()
