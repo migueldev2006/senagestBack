@@ -5,12 +5,38 @@ import axios from 'axios';
 import { Psicultura } from './entities/psicultura.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { TimerDto, ValidarBrokerDto } from './dto';
+import { enviarEstado, mqttClient } from '../Broker/brokerClient';
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
   private ciclos: Record<number, NodeJS.Timeout | NodeJS.Timeout[]> = {};
   // manualTimers guarda estado y inicio del ciclo actual en memoria
   private manualTimers: Record<number, { ultimoEstado: boolean; inicio: Date }> = {};
+
+async toggleManual(id: number, estado: boolean) {
+  // Guardar el estado en la DB
+  const registro = await this.psiculturaRepo.findOne({ where: { id } });
+  if (!registro) throw new Error('Registro no encontrado');
+
+  registro.estado = estado;
+  registro.estadoActual = 'manual';
+  if (estado) registro.ultimaActivacion = new Date();
+  else registro.ultimaDesactivacion = new Date();
+
+  await this.psiculturaRepo.save(registro);
+
+  // Enviar mensaje al broker
+  try {
+    enviarEstado(estado, !estado); // s1=estado, s2=contrario (ajusta según tu lógica)
+    console.log(`📤 Estado manual publicado en broker: ${estado}`);
+  } catch (err) {
+    console.error('❌ Error al enviar estado al broker:', err);
+  }
+
+  return { ok: true, estado };
+}
+
+
 
   constructor(
     @InjectRepository(Psicultura)
@@ -29,6 +55,9 @@ export class PsiculturaService implements OnModuleInit {
       where: { psicultura: { id: psiculturaId } as any },
       order: { id: 'DESC' },
     });
+  }
+  async getHistorialInfo() {
+    return await this.historialRepo.find()
   }
 
   async onModuleInit() {
@@ -149,22 +178,18 @@ const nuevo = this.psiculturaRepo.create({
   //  Verificación del broker
   // ---------------------------------------------
   console.log(`🌐 [AUTO] Verificando broker para ID: ${id}...`);
+const client = mqttClient();
 
-  try {
-    await axios.get(registro.url, {
-      auth: { username: registro.usuario, password: registro.contrasena },
-      timeout: 3000,
-      validateStatus: () => true,
-    });
-    console.log(`✅ [AUTO] Broker OK para ID: ${id}`);
-  } catch {
-    console.log(`❌ [AUTO] Broker caído → deteniendo y guardando estado...`);
-    registro.estado = false;
-    registro.estadoActual = 'broker_down';
-    registro.ultimaDesactivacion = new Date();
-    await this.psiculturaRepo.save(registro);
-    return;
-  }
+if (!client.connected) {
+  console.log(`❌ [AUTO] Broker no conectado → deteniendo y guardando estado...`);
+  registro.estado = false;
+  registro.estadoActual = 'broker_down';
+  registro.ultimaDesactivacion = new Date();
+  await this.psiculturaRepo.save(registro);
+  return;
+}
+
+console.log(`✅ [AUTO] Broker conectado → ID: ${id}`);
 
   // ---------------------------------------------
   //  Cancelar ciclos previos

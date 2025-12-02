@@ -7,13 +7,13 @@ export class Psicultura {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'varchar', length: 200 })
+  @Column({ type: 'varchar', length: 200,nullable: true })
   url: string;
 
-  @Column({ type: 'varchar', length: 200 })
+  @Column({ type: 'varchar', length: 200 ,nullable: true})
   usuario: string;
 
-  @Column({ type: 'varchar', length: 200 })
+  @Column({ type: 'varchar', length: 200,nullable: true })
   contrasena: string;
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })
