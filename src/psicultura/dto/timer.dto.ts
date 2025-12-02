@@ -2,8 +2,8 @@ import { IsString } from 'class-validator'
 
 export class TimerDto {
   @IsString()
-  TiempoEncendido: string
+  tiempoEncendido?: string
 
   @IsString()
-  tiempoApagado: string
+  tiempoApagado?: string
 }

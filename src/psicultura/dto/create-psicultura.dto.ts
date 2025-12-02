@@ -12,14 +12,14 @@ export class CreatePsiculturaDto {
 
   @IsOptional()
   @IsString()
-  TiempoEncendido?: string
+  tiempoEncendido?: string
 
   @IsOptional()
   @IsString()
   tiempoApagado?: string
 
   @IsNumber()
-  usuarios: number
+  usuarioId: number
 
   @IsOptional()
   @IsBoolean()

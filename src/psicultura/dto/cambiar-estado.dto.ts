@@ -2,5 +2,7 @@ import { IsBoolean } from 'class-validator'
 
 export class CambiarEstadoDto {
   @IsBoolean()
-  estado: boolean
+  activo: boolean
+  @IsBoolean()
+  manual: boolean
 }
