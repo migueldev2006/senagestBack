@@ -12,6 +12,7 @@ import { RolPermiso } from './src/rolpermiso/entities/rolpermiso.entity';
 import { RutaFront } from './src/rutas/entities/ruta.entity';
 import { Usuario } from './src/usuarios/entities/usuario.entity';
 import { Psicultura } from './src/psicultura/entities/psicultura.entity';
+import { PsiculturaHistorial } from './src/psicultura/entities/psicultura-historial.entity';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ const AppDataSource = new DataSource({
     RutaFront,
     Programa,
     Psicultura,
+    PsiculturaHistorial
   ],
   synchronize: false,
 });
@@ -51,6 +53,8 @@ async function seed() {
     const rpRepo = AppDataSource.getRepository(RolPermiso);
     const usuarioRepo = AppDataSource.getRepository(Usuario);
     const psiculturaRepo = AppDataSource.getRepository(Psicultura);
+    const psiculturaHistorialRepo =
+      AppDataSource.getRepository(PsiculturaHistorial);
 
     // 1) Modulos
     const modulos = await moduloRepo.save([
@@ -334,10 +338,24 @@ async function seed() {
       url: '192.168.4.115',
       usuario: 'Robert',
       contrasena: 'Senawil1234',
-      TiempoEncendido: '00:00:30',
-      tiempoApagado: '00:01:10',
+      tiempoEncendido: '00:00:30',
+      tiempoApagado: '00:00:10',
       estado: true,
+      estadoActual: 'inactivo',
+      fechaCreacion:new Date(),
+      fechaActualizacion:new Date(),
+      modo: 'auto',
       usuarios: { id: 1 },
+    });
+
+    await psiculturaHistorialRepo.save({
+      psicultura: { id: 1 },
+      inicio: new Date(),
+      fin: null, // historial abierto
+      estado: true, // está encendido
+      modo: 'auto', // modo actual
+      tiempoMs: 0, // inicia en 0
+      fechaCreacion:new Date()
     });
 
     console.log('SEED COMPLETO EJECUTADO ✔');
