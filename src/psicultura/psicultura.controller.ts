@@ -2,6 +2,8 @@ import { Controller, Post, Body, Param, Get, Patch } from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
 import { CreatePsiculturaDto, TimerDto, ValidarBrokerDto } from './dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
+import { enviarEstado } from '../Broker/brokerClient'; 
+
 
 @Controller('psicultura')
 export class PsiculturaController {
@@ -22,10 +24,13 @@ export class PsiculturaController {
     return this.service.getPsiculturaInfo();
   }
 
-  // historial del psicultura
   @Get(':id/historial')
   getHistorial(@Param('id') id: number) {
     return this.service.getHistorial(Number(id));
+  }
+  @Get('historial')
+  getHistorialInfo() {
+    return this.service.getHistorialInfo();
   }
 
   @Get(':id/estado')
@@ -62,4 +67,13 @@ export class PsiculturaController {
   powerRestore(@Param('id') id: number) {
     return this.service.reportPowerRestore(Number(id));
   }
+
+  @Patch(':id/manual')
+toggleManual(
+  @Param('id') id: number,
+  @Body() body: CambiarEstadoDto,
+) {
+  return this.service.toggleManual(Number(id), Boolean(body.activo));
+}
+
 }
