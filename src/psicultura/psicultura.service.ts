@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Psicultura } from './entities/psicultura.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
+import { PsiculturaData } from './entities/psicultura-data.entity';
 import { TimerDto, ValidarBrokerDto } from './dto';
 import { MqttService } from './Broker/mqtt.service';
 
@@ -20,6 +21,9 @@ export class PsiculturaService implements OnModuleInit {
 
     @InjectRepository(PsiculturaHistorial)
     private readonly historialRepo: Repository<PsiculturaHistorial>,
+
+    @InjectRepository(PsiculturaData)
+    private readonly dataRepo: Repository<PsiculturaData>,
 
     private readonly mqttService: MqttService,
   ) {}
@@ -286,48 +290,75 @@ export class PsiculturaService implements OnModuleInit {
     return { ok: true, estado: registro.estado, estadoActual: registro.estadoActual };
   }
 
-async handleBrokerPayload(id: number, payload: string) {
-  const value = payload === '1' || payload === 'true';
-
+async handleBrokerPayload(id: number, payload: string, topic?: string) {
   const registro = await this.psiculturaRepo.findOne({ where: { id } });
   if (!registro) throw new HttpException('Registro no encontrado', 404);
 
-  // Guardamos TAL CUAL llega del broker
-  registro.topic = payload;
+  // Intentar interpretar payload como booleano simple
+  const value = payload === '1' || payload === 'true' || payload === 'True';
 
-    // Broker payloads se tratan como manual (según tu regla)
-    registro.estado = value;
-    registro.estadoActual = 'manual';
-    if (value) registro.ultimaActivacion = new Date();
-    else registro.ultimaDesactivacion = new Date();
-    await this.psiculturaRepo.save(registro);
-
-    if (value) {
-      const abierto = await this.buscarHistorialAbierto(id);
-      if (!abierto) {
-        const h = this.historialRepo.create({
-          psicultura: registro,
-          estado: true,
-          inicio: new Date(),
-          fin: null,
-          tiempoMs: null,
-          modo: 'manual',
-          fechaCreacion: new Date(),
-        });
-        await this.historialRepo.save(h);
-      }
-    } else {
-      const abierto = await this.buscarHistorialAbierto(id);
-      if (abierto) {
-        const fin = new Date();
-        abierto.fin = fin;
-        abierto.tiempoMs = fin.getTime() - abierto.inicio.getTime();
-        await this.historialRepo.save(abierto);
-      }
-    }
-
-    return { estado: registro.estado };
+  // Guardar en tabla de datos del broker (psicultura_data)
+  let dataParsed: any = null;
+  try {
+    dataParsed = JSON.parse(payload);
+  } catch {
+    dataParsed = null;
   }
+
+  try {
+    const dataRow = this.dataRepo.create({
+      psicultura: registro,
+      topico: topic ?? registro.topic ?? '',
+      payload,
+      dataParsed,
+      temperatura: dataParsed?.temperatura ?? dataParsed?.temp ?? null,
+      humedad: dataParsed?.humedad ?? dataParsed?.humidity ?? null,
+      oxigeno: dataParsed?.oxigeno ?? dataParsed?.o2 ?? null,
+      ph: dataParsed?.ph ?? null,
+      conductividad: dataParsed?.conductividad ?? dataParsed?.ec ?? null,
+      s1: dataParsed?.s1 ?? dataParsed?.s1_raw ?? null,
+      s2: dataParsed?.s2 ?? dataParsed?.s2_raw ?? null,
+      fechaCreacion: new Date(),
+    });
+    const saved = await this.dataRepo.save(dataRow);
+    this.logger.log(`Datos MQTT guardados id_psicultura=${id} dataId=${saved.id}`);
+  } catch (err) {
+    this.logger.error('Error guardando datos MQTT en psicultura_data', err?.message || err);
+  }
+
+  // Ahora actualizar estado del registro según sea necesario (tratamos payloads booleanos)
+  registro.estado = value;
+  registro.estadoActual = 'manual';
+  if (value) registro.ultimaActivacion = new Date();
+  else registro.ultimaDesactivacion = new Date();
+  await this.psiculturaRepo.save(registro);
+
+  if (value) {
+    const abierto = await this.buscarHistorialAbierto(id);
+    if (!abierto) {
+      const h = this.historialRepo.create({
+        psicultura: registro,
+        estado: true,
+        inicio: new Date(),
+        fin: null,
+        tiempoMs: null,
+        modo: 'manual',
+        fechaCreacion: new Date(),
+      });
+      await this.historialRepo.save(h);
+    }
+  } else {
+    const abierto = await this.buscarHistorialAbierto(id);
+    if (abierto) {
+      const fin = new Date();
+      abierto.fin = fin;
+      abierto.tiempoMs = fin.getTime() - abierto.inicio.getTime();
+      await this.historialRepo.save(abierto);
+    }
+  }
+
+  return { estado: registro.estado };
+}
 
   async handleBrokerConnectionLost(id: number) {
     const registro = await this.psiculturaRepo.findOne({ where: { id } });

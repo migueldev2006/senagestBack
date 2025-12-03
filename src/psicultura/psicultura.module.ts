@@ -5,13 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Psicultura } from './entities/psicultura.entity';
 import { Usuario } from 'src/usuarios/entities/usuario.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
+import { PsiculturaData } from './entities/psicultura-data.entity';
 import { MqttModule } from './Broker/mqtt.module';
 
 
 @Module({
   controllers: [PsiculturaController],
   providers: [PsiculturaService],
-  imports: [TypeOrmModule.forFeature([Psicultura, Usuario, PsiculturaHistorial]), forwardRef(() => MqttModule)],
+  imports: [TypeOrmModule.forFeature([Psicultura, Usuario, PsiculturaHistorial, PsiculturaData]), forwardRef(() => MqttModule)],
   exports: [PsiculturaService, TypeOrmModule],
 })
 export class PsiculturaModule {}

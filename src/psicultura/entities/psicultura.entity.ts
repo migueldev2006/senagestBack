@@ -22,7 +22,7 @@ export class Psicultura {
   @Column({ type: 'varchar', length: 200, nullable: true })
   contrasena: string;
 
-  @Column({ type: 'varchar', length: 10, nullable: true })
+  @Column({ type: 'text', nullable: true })
   topic: string | null;
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })

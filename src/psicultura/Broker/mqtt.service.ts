@@ -77,6 +77,7 @@ export class MqttService implements OnModuleInit {
             await psiculturaService.handleBrokerPayload(
               Number(parsed.id),
               String(parsed.estado),
+              topic,
             );
             return;
           }
@@ -86,6 +87,7 @@ export class MqttService implements OnModuleInit {
               await psiculturaService.handleBrokerPayload(
                 Number(infos[0].id),
                 String(parsed.estado),
+                topic,
               );
             }
             return;
@@ -98,6 +100,7 @@ export class MqttService implements OnModuleInit {
           await psiculturaService.handleBrokerPayload(
             Number(infos[0].id),
             String(parsed),
+            topic,
           );
         }
       } catch (err) {

@@ -46,8 +46,11 @@ export class PsiculturaController {
   }
 
   @Post(':id/broker-payload')
-  brokerPayload(@Param('id') id: number, @Body() body: { payload: string }) {
-    return this.service.handleBrokerPayload(Number(id), body.payload);
+  brokerPayload(
+    @Param('id') id: number,
+    @Body() body: { payload: string; topic?: string },
+  ) {
+    return this.service.handleBrokerPayload(Number(id), body.payload, body.topic);
   }
 
   @Post(':id/broker/lost')
