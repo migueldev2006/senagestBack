@@ -406,4 +406,61 @@ async handleBrokerPayload(id: number, payload: string, topic?: string) {
   async toggleManual(id: number, estado: boolean) {
     return this.cambiarEstado(id, estado, true);
   }
+
+  async obtenerDatosGuardados(psiculturaId: number, limite: number = 100) {
+    const registro = await this.psiculturaRepo.findOne({ where: { id: psiculturaId } });
+    if (!registro) throw new HttpException('Registro no encontrado', 404);
+
+    const datos = await this.dataRepo.find({
+      where: { psicultura: { id: psiculturaId } as any },
+      order: { fechaCreacion: 'DESC' },
+      take: limite,
+    });
+
+    return datos;
+  }
+
+  async obtenerEstadisticas(psiculturaId: number, horas: number = 24) {
+    const registro = await this.psiculturaRepo.findOne({ where: { id: psiculturaId } });
+    if (!registro) throw new HttpException('Registro no encontrado', 404);
+
+    const ahora = new Date();
+    const hace = new Date(ahora.getTime() - horas * 60 * 60 * 1000);
+
+    const datos = await this.dataRepo.find({
+      where: { psicultura: { id: psiculturaId } as any },
+      order: { fechaCreacion: 'DESC' },
+    });
+
+    const filtrados = datos.filter((d) => d.fechaCreacion >= hace);
+
+    if (filtrados.length === 0) {
+      return {
+        temperatura: null,
+        humedad: null,
+        oxigeno: null,
+        ph: null,
+        totalRegistros: 0,
+      };
+    }
+
+    const calcularStats = (valores: (number | null)[]) => {
+      const numeros = valores.filter((v) => v !== null) as number[];
+      if (numeros.length === 0) return null;
+      return {
+        promedio: numeros.reduce((a, b) => a + b, 0) / numeros.length,
+        minimo: Math.min(...numeros),
+        maximo: Math.max(...numeros),
+      };
+    };
+
+    return {
+      temperatura: calcularStats(filtrados.map((d) => d.temperatura)),
+      humedad: calcularStats(filtrados.map((d) => d.humedad)),
+      oxigeno: calcularStats(filtrados.map((d) => d.oxigeno)),
+      ph: calcularStats(filtrados.map((d) => d.ph)),
+      conductividad: calcularStats(filtrados.map((d) => d.conductividad)),
+      totalRegistros: filtrados.length,
+    };
+  }
 }

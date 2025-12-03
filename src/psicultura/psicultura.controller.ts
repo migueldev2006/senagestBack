@@ -1,5 +1,5 @@
 // File: src/psicultura/psicultura.controller.ts
-import { Controller, Post, Body, Param, Get, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, Patch, Query } from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
 import { TimerDto, ValidarBrokerDto } from './dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
@@ -76,5 +76,21 @@ export class PsiculturaController {
   @Patch(':id/manual')
   toggleManual(@Param('id') id: number, @Body() body: CambiarEstadoDto) {
     return this.service.toggleManual(Number(id), Boolean(body.activo));
+  }
+
+  @Get(':id/datos-guardados')
+  obtenerDatosGuardados(
+    @Param('id') id: number,
+    @Query('limite') limite?: number,
+  ) {
+    return this.service.obtenerDatosGuardados(Number(id), limite || 100);
+  }
+
+  @Get(':id/estadisticas-datos')
+  obtenerEstadisticas(
+    @Param('id') id: number,
+    @Query('horas') horas?: number,
+  ) {
+    return this.service.obtenerEstadisticas(Number(id), horas || 24);
   }
 }

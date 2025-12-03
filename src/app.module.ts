@@ -13,6 +13,8 @@ import { ConfigModule } from '@nestjs/config';
 import { FichasModule } from './fichas/fichas.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PsiculturaModule } from './psicultura/psicultura.module';
+import { RootController } from './root.controller';
+import { PsiculturaData } from './psicultura/entities/psicultura-data.entity';
 
 console.log('🚀 Variables de entorno:');
 console.log('HOST:', process.env.HOST);
@@ -37,6 +39,7 @@ console.log('PASSWORD:', process.env.PASSWORD);
       synchronize:true,
       // dropSchema:true
     }),
+    TypeOrmModule.forFeature([PsiculturaData]),
 
     AuthModule,
     UsuariosModule,
@@ -49,5 +52,6 @@ console.log('PASSWORD:', process.env.PASSWORD);
     FichasModule,
     PsiculturaModule,
   ],
+  controllers: [RootController],
 })
 export class AppModule {}
