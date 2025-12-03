@@ -1,5 +1,11 @@
 import { Usuario } from '../../usuarios/entities/usuario.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+} from 'typeorm';
 import { PsiculturaHistorial } from './psicultura-historial.entity';
 
 @Entity('psicultura')
@@ -7,14 +13,17 @@ export class Psicultura {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'varchar', length: 200,nullable: true })
+  @Column({ type: 'varchar', length: 200, nullable: true })
   url: string;
 
-  @Column({ type: 'varchar', length: 200 ,nullable: true})
+  @Column({ type: 'varchar', length: 200, nullable: true })
   usuario: string;
 
-  @Column({ type: 'varchar', length: 200,nullable: true })
+  @Column({ type: 'varchar', length: 200, nullable: true })
   contrasena: string;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  topic: string | null;
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })
   tiempoEncendido: string;
@@ -28,10 +37,10 @@ export class Psicultura {
   @Column({ type: 'boolean', default: false })
   estado: boolean;
 
-  @Column({ type: 'varchar', length: 20, default: 'inactivo' })
+  @Column({ type: 'varchar', length: 25, default: 'inactivo' })
   estadoActual: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'auto' })
+  @Column({ type: 'varchar', length: 20, default: 'auto' })
   modo: string;
 
   @Column({ type: 'timestamp', nullable: true })

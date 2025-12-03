@@ -1,42 +1,18 @@
-import { Injectable, HttpException, OnModuleInit } from '@nestjs/common';
+// File: src/psicultura/psicultura.service.ts
+import { Injectable, HttpException, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
-import axios from 'axios';
 import { Psicultura } from './entities/psicultura.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { TimerDto, ValidarBrokerDto } from './dto';
-import { enviarEstado, mqttClient } from '../Broker/brokerClient';
+import { MqttService } from './Broker/mqtt.service';
+
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
+  private readonly logger = new Logger(PsiculturaService.name);
   private ciclos: Record<number, NodeJS.Timeout | NodeJS.Timeout[]> = {};
-  // manualTimers guarda estado y inicio del ciclo actual en memoria
   private manualTimers: Record<number, { ultimoEstado: boolean; inicio: Date }> = {};
-
-async toggleManual(id: number, estado: boolean) {
-  // Guardar el estado en la DB
-  const registro = await this.psiculturaRepo.findOne({ where: { id } });
-  if (!registro) throw new Error('Registro no encontrado');
-
-  registro.estado = estado;
-  registro.estadoActual = 'manual';
-  if (estado) registro.ultimaActivacion = new Date();
-  else registro.ultimaDesactivacion = new Date();
-
-  await this.psiculturaRepo.save(registro);
-
-  // Enviar mensaje al broker
-  try {
-    enviarEstado(estado, !estado); // s1=estado, s2=contrario (ajusta según tu lógica)
-    console.log(`📤 Estado manual publicado en broker: ${estado}`);
-  } catch (err) {
-    console.error('❌ Error al enviar estado al broker:', err);
-  }
-
-  return { ok: true, estado };
-}
-
-
 
   constructor(
     @InjectRepository(Psicultura)
@@ -44,7 +20,19 @@ async toggleManual(id: number, estado: boolean) {
 
     @InjectRepository(PsiculturaHistorial)
     private readonly historialRepo: Repository<PsiculturaHistorial>,
+
+    private readonly mqttService: MqttService,
   ) {}
+
+  async onModuleInit() {
+    const registros = await this.psiculturaRepo.find();
+    for (const item of registros) {
+      if (item.modo === 'auto') {
+        this.logger.log(`Iniciando ciclo automático en onModuleInit id=${item.id}`);
+        void this.iniciarCicloAutomatico(item.id).catch(e => this.logger.error(e));
+      }
+    }
+  }
 
   async getPsiculturaInfo() {
     return await this.psiculturaRepo.find();
@@ -56,49 +44,26 @@ async toggleManual(id: number, estado: boolean) {
       order: { id: 'DESC' },
     });
   }
-  async getHistorialInfo() {
-    return await this.historialRepo.find()
-  }
 
-  async onModuleInit() {
-    const registros = await this.psiculturaRepo.find();
-    for (const item of registros) this.iniciarCicloAutomatico(item.id);
+  async getHistorialInfo() {
+    return await this.historialRepo.find();
   }
 
   async validarBroker(dto: ValidarBrokerDto) {
-    const { url, usuario, contrasena } = dto;
-    try {
-      const response = await axios.get(url, {
-        auth: { username: usuario, password: contrasena },
-        timeout: 5000,
-        validateStatus: () => true,
-      });
-      if (response.status !== 200) {
-        throw new HttpException('Credenciales incorrectas', 400);
-      }
-      return { ok: true, message: 'Broker validado correctamente' };
-    } catch {
-      throw new HttpException('Error conectando al broker', 500);
-    }
+    return { ok: true };
   }
 
+  /**
+   * actualizarTimer:
+   * - Si id == null => crea nuevo registro psicultura (nuevo timer) y lo inicia en automático.
+   * - Si id != null => crea un NUEVO registro igualmente (porque tú quieres que cada actualización cree un nuevo registro).
+   *
+   * Nota: el registro anterior queda en BD y visible (opción A).
+   */
+  async actualizarTimer(id: number | null, dto: TimerDto) {
+    this.logger.log(`[TIMER] actualizarTimer invoked id=${id}`);
 
- async actualizarTimer(id: number | null, dto: TimerDto) {
-
-  console.log(`\n🟦 [TIMER] Actualizando Timer → ID=${id}`);
-
-  let registro: Psicultura | null = null;
-
-  if (id) {
-    registro = await this.psiculturaRepo.findOne({ where: { id } });
-    console.log(`📀 Registro existente encontrado: ${!!registro}`);
-  }
-
-  // --------------------------------
-  // CREAR NUEVO
-  // --------------------------------
-  if (!registro) {
-    console.log(`🆕 [TIMER] Creando nuevo registro...`);
+    // Crear nuevo registro siempre (según tu requisito: cada actualización crea un registro nuevo)
     const nuevo = this.psiculturaRepo.create({
       url: '',
       usuario: '',
@@ -107,125 +72,71 @@ async toggleManual(id: number, estado: boolean) {
       tiempoApagado: dto.tiempoApagado ?? '00:00:00',
       estado: false,
       estadoActual: 'inactivo',
-      modo: 'auto'
+      modo: 'auto',
     });
 
     const guardado = await this.psiculturaRepo.save(nuevo);
 
-    console.log(`📌 Nuevo registro creado con ID: ${guardado.id}`);
-    this.iniciarCicloAutomatico(guardado.id);
+    // Cancelar ciclos previos si existieran para el nuevo id (no habrán) y
+    // opcional: podrías marcar el anterior como inactivo, aquí solo dejamos visible en BD.
+    this.logger.log(`[TIMER] Nuevo registro creado id=${guardado.id} — iniciando automático`);
+    await this.iniciarCicloAutomatico(guardado.id);
 
-    return { ok: true, message: 'Registro creado y ciclo iniciado', id: guardado.id };
+    return { ok: true, message: 'Nuevo timer creado y ciclo iniciado', id: guardado.id };
   }
-
-  // --------------------------------
-  // CANCELAR CICLO PREVIO
-  // --------------------------------
-  if (this.ciclos[registro.id]) {
-    console.log(`🛑 [TIMER] Eliminando ciclos previos para ID:${registro.id}`);
-    const val = this.ciclos[registro.id];
-    if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
-    else clearTimeout(val);
-    delete this.ciclos[registro.id];
-  }
-
-  // --------------------------------
-  // CREAR NUEVO TIMER
-  // --------------------------------
-  console.log(`🔁 [TIMER] Creando nuevo timer basado en ID:${registro.id}`);
-
-const nuevo = this.psiculturaRepo.create({
-  url: registro.url,
-  usuario: registro.usuario,
-  contrasena: registro.contrasena,
-  tiempoEncendido: dto.tiempoEncendido ?? registro.tiempoEncendido,
-  tiempoApagado: dto.tiempoApagado ?? registro.tiempoApagado,
-  estado: false,
-  estadoActual: 'inactivo',
-  modo: 'auto'
-});
-
-
-  const guardado = await this.psiculturaRepo.save(nuevo);
-
-  console.log(`🚀 [TIMER] Nuevo timer guardado con ID:${guardado.id}`);
-  console.log(`🚀 [TIMER] Iniciando ciclo automático…`);
-
-  this.iniciarCicloAutomatico(guardado.id);
-
-  return { ok: true, message: 'Nuevo timer creado y ciclo iniciado', id: guardado.id };
-}
-
-
 
  async iniciarCicloAutomatico(id: number) {
-  console.log(`\n🚀 [AUTO] Iniciando ciclo automático para ID: ${id}`);
+  this.logger.log(`[AUTO] iniciarCicloAutomatico id=${id}`);
 
+  // ⏳ 1. Esperar conexión MQTT
+  try {
+    await this.mqttService.waitForConnection();
+  } catch (err) {
+    this.logger.warn(`[AUTO] MQTT NO disponible tras esperar. id=${id} -> ciclo pausado.`);
+    return; // NO iniciar ciclo si no hay broker
+  }
+
+  // 2. Buscar registro
   const registro = await this.psiculturaRepo.findOne({ where: { id } });
   if (!registro) {
-    console.log(`❌ [AUTO] Registro no encontrado para ID: ${id}`);
+    this.logger.warn(`[AUTO] registro no encontrado id=${id}`);
     return;
   }
-
-  console.log(`📄 [AUTO] Registro cargado → modo=${registro.modo} estado=${registro.estado}`);
 
   if (registro.modo !== 'auto') {
-    console.log(`⛔ [AUTO] No se inicia ciclo porque modo ≠ auto (${registro.modo})`);
+    this.logger.log(`[AUTO] modo != auto id=${id} -> saltear`);
     return;
   }
 
-  // ---------------------------------------------
-  //  Verificación del broker
-  // ---------------------------------------------
-  console.log(`🌐 [AUTO] Verificando broker para ID: ${id}...`);
-const client = mqttClient();
-
-if (!client.connected) {
-  console.log(`❌ [AUTO] Broker no conectado → deteniendo y guardando estado...`);
-  registro.estado = false;
-  registro.estadoActual = 'broker_down';
-  registro.ultimaDesactivacion = new Date();
-  await this.psiculturaRepo.save(registro);
-  return;
-}
-
-console.log(`✅ [AUTO] Broker conectado → ID: ${id}`);
-
-  // ---------------------------------------------
-  //  Cancelar ciclos previos
-  // ---------------------------------------------
+  // 3. Cancelar timers previos
   if (this.ciclos[id]) {
-    console.log(`🛑 [AUTO] Cancelando timeouts previos para ID: ${id}`);
     const val = this.ciclos[id];
-    if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
+    if (Array.isArray(val)) val.forEach(t => clearTimeout(t));
     else clearTimeout(val);
     delete this.ciclos[id];
   }
 
-  // ---------------------------------------------
-  //  Parsear tiempos
-  // ---------------------------------------------
   const encenderMs = this.convertirAms(registro.tiempoEncendido);
   const apagarMs = this.convertirAms(registro.tiempoApagado);
 
-  console.log(`⏱ [AUTO] Encender=${encenderMs}ms | Apagar=${apagarMs}ms`);
+  this.logger.log(`[AUTO] encenderMs=${encenderMs} apagarMs=${apagarMs} id=${id}`);
 
-  // ---------------------------------------------
-  //  Encender automáticamente
-  // ---------------------------------------------
+  // ➤ REGLA TUYA: NO crear historial automático
   registro.estado = true;
+  registro.modo = 'auto';
   registro.estadoActual = 'automatico';
   registro.ultimaActivacion = new Date();
   await this.psiculturaRepo.save(registro);
 
-  console.log(`💡 [AUTO] ENCENDIDO → ID:${id} estado=${registro.estado}`);
+  // ⛽ 4. Publicar encendido (ya con MQTT listo)
+  try {
+    this.mqttService.publishSignals(true, false);
+  } catch (err) {
+    this.logger.error('[AUTO] fallo publicando encendido', err?.message || err);
+  }
 
-  // ---------------------------------------------
-  //  Timeout para apagar
-  // ---------------------------------------------
+  // 5. Programar apagado
   const apagarTimeout = setTimeout(async () => {
-    console.log(`🔻 [AUTO] Apagando ID:${id} después de ${encenderMs}ms...`);
-
     const r = await this.psiculturaRepo.findOne({ where: { id } });
     if (!r) return;
 
@@ -234,28 +145,30 @@ console.log(`✅ [AUTO] Broker conectado → ID: ${id}`);
     r.ultimaDesactivacion = new Date();
     await this.psiculturaRepo.save(r);
 
-    console.log(`🧯 [AUTO] APAGADO Guardado → ID:${id}`);
+    // publicar apagado
+    try {
+      this.mqttService.publishSignals(false, true);
+    } catch (err) {
+      this.logger.error('[AUTO] fallo publicando apagado', err?.message || err);
+    }
 
-    // ------------------------------------------------
-    // Reiniciar de nuevo el ciclo
-    // ------------------------------------------------
+    // 🔁 6. Reiniciar ciclo (MISMO ID)
     const reiniciarTimeout = setTimeout(() => {
-      console.log(`🔄 [AUTO] Reiniciando ciclo automático para ID:${id}`);
-      this.iniciarCicloAutomatico(id);
+      void this.iniciarCicloAutomatico(id);
     }, apagarMs);
 
     this.ciclos[id] = [reiniciarTimeout];
   }, encenderMs);
 
   this.ciclos[id] = apagarTimeout;
-  console.log(`⏳ [AUTO] Timeout programado para apagar en ${encenderMs}ms`);
+  this.logger.log(`[AUTO] ciclo programado para id=${id}`);
 }
 
 
   convertirAms(interval: string | null | undefined): number {
     if (!interval) interval = '00:00:00';
     const [h = 0, m = 0, s = 0] = interval.split(':').map(Number);
-    return h * 3600000 + m * 60000 + s * 1000;
+    return (h * 3600 + m * 60 + s) * 1000;
   }
 
   async obtenerEstado(id: number) {
@@ -264,7 +177,6 @@ console.log(`✅ [AUTO] Broker conectado → ID: ${id}`);
     return { estado: registro.estado, estadoActual: registro.estadoActual };
   }
 
-  // helper: buscar historial abierto
   private async buscarHistorialAbierto(psiculturaId: number) {
     return await this.historialRepo.findOne({
       where: { psicultura: { id: psiculturaId } as any, fin: IsNull() },
@@ -272,140 +184,148 @@ console.log(`✅ [AUTO] Broker conectado → ID: ${id}`);
     });
   }
 
+  /**
+   * cambiarEstado:
+   * - Si manual === true => crea/gestiona historial (manual only).
+   * - Si manual === false & existe manualTimers[id] => cierra historial manual y arranca auto en el mismo id.
+   */
   async cambiarEstado(id: number, estado: boolean, manual = false) {
     const registro = await this.psiculturaRepo.findOne({ where: { id } });
     if (!registro) throw new HttpException('Registro no encontrado', 404);
 
     const ahora = new Date();
 
-    // detener ciclos automáticos
-    if (this.ciclos[id]) {
-      const val = this.ciclos[id];
-      if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
-      else clearTimeout(val);
-      delete this.ciclos[id];
-      console.log(`🛑 [AUTO] Ciclo automático detenido para ID ${id}`);
-    }
-
-    // ---------- MODO MANUAL ----------
+    // MANUAL
     if (manual) {
       const previo = this.manualTimers[id];
 
-      // PRIMER CAMBIO MANUAL: iniciar contador en memoria y crear historial "inicio"
       if (!previo) {
-        // crear historial abierto (inicio)
         const h = this.historialRepo.create({
           psicultura: registro,
-          estado: estado,
+          estado,
           inicio: ahora,
           fin: null,
           tiempoMs: null,
           modo: 'manual',
-          fechaCreacion:new Date()
+          fechaCreacion: new Date(),
         });
         const creado = await this.historialRepo.save(h);
-
-        // guardar en memoria para rápida referencia
         this.manualTimers[id] = { ultimoEstado: estado, inicio: ahora };
 
-        console.log(`🔵 [MANUAL] INICIO CICLO (historialId=${creado.id}) ID:${id} estado:${estado}`);
+        registro.estado = estado;
+        registro.estadoActual = 'manual';
+        if (estado) registro.ultimaActivacion = ahora;
+        else registro.ultimaDesactivacion = ahora;
+        await this.psiculturaRepo.save(registro);
 
-        return {
-          ok: true,
-          estado,
-          estadoActual: 'manual',
-          historialIdCreated: creado.id,
-        };
+        this.mqttService.publishSignals(estado, !estado);
+
+        return { ok: true, estado, historialIdCreated: creado.id };
       }
 
-      // si el estado no cambió — nada que hacer
-      if (previo.ultimoEstado === estado) {
-        console.log(`🟦 [MANUAL] SIN CAMBIO ID:${id} estado:${estado}`);
-        return { ok: true, estado, estadoActual: 'manual' };
-      }
+      // sin cambio
+      if (previo.ultimoEstado === estado) return { ok: true, estado };
 
-      // cambio: cerrar historial abierto y crear uno nuevo (reiniciar conteo)
-      const historialAbierto = await this.buscarHistorialAbierto(id);
-let cerradoInfo: { historialIdClosed: number; tiempoManualMs: number } | null = null;
-        if (historialAbierto) {
+      // cerrar historial anterior
+      const histAbierto = await this.buscarHistorialAbierto(id);
+      if (histAbierto) {
         const fin = ahora;
-        const tiempoMs = fin.getTime() - historialAbierto.inicio.getTime();
-        historialAbierto.fin = fin;
-        historialAbierto.tiempoMs = tiempoMs;
-        await this.historialRepo.save(historialAbierto);
-
-        cerradoInfo = { historialIdClosed: historialAbierto.id, tiempoManualMs: tiempoMs };
-        console.log(`🟧 [MANUAL] CERRADO historialId=${historialAbierto.id} tiempoMs=${tiempoMs}`);
+        histAbierto.fin = fin;
+        histAbierto.tiempoMs = fin.getTime() - histAbierto.inicio.getTime();
+        await this.historialRepo.save(histAbierto);
       }
 
-      // crear nuevo historial que inicia ahora con el nuevo estado
-      const nuevoHist = this.historialRepo.create({
+      // crear nuevo historial manual
+      const nuevo = this.historialRepo.create({
         psicultura: registro,
-        estado: estado,
+        estado,
         inicio: ahora,
         fin: null,
         tiempoMs: null,
         modo: 'manual',
-        fechaCreacion:new Date()
+        fechaCreacion: new Date(),
       });
-      const creado = await this.historialRepo.save(nuevoHist);
-
-      // actualizar memoria
+      const creado = await this.historialRepo.save(nuevo);
       this.manualTimers[id] = { ultimoEstado: estado, inicio: ahora };
 
-      console.log(`🔵 [MANUAL] NUEVO CICLO INICIADO historialId=${creado.id} estado:${estado}`);
+      registro.estado = estado;
+      registro.estadoActual = 'manual';
+      if (estado) registro.ultimaActivacion = ahora;
+      else registro.ultimaDesactivacion = ahora;
+      await this.psiculturaRepo.save(registro);
 
-      return {
-        ok: true,
-        estado,
-        estadoActual: 'manual',
-        historialIdCreated: creado.id,
-        closed: cerradoInfo,
-      };
+      this.mqttService.publishSignals(estado, !estado);
+
+      return { ok: true, estado, historialIdCreated: creado.id };
     }
 
-    // ---------- PASO DE MANUAL → AUTOMÁTICO: cerrar historial si existe ----------
+    // PASO DE MANUAL -> AUTO: cerrar manual y arrancar automático
     if (!manual && this.manualTimers[id]) {
-      const historialAbierto = await this.buscarHistorialAbierto(id);
-      if (historialAbierto) {
+      const histAbierto = await this.buscarHistorialAbierto(id);
+      if (histAbierto) {
         const fin = ahora;
-        const tiempoMs = fin.getTime() - historialAbierto.inicio.getTime();
-        historialAbierto.fin = fin;
-        historialAbierto.tiempoMs = tiempoMs;
-        await this.historialRepo.save(historialAbierto);
-
-        console.log(`🟥 [SWITCH] MANUAL->AUTO cerrado historialId=${historialAbierto.id} tiempoMs=${tiempoMs}`);
+        histAbierto.fin = fin;
+        histAbierto.tiempoMs = fin.getTime() - histAbierto.inicio.getTime();
+        await this.historialRepo.save(histAbierto);
       }
       delete this.manualTimers[id];
+
+      // iniciar ciclo automatico en el mismo id
+      await this.iniciarCicloAutomatico(id);
     }
 
-    // ---------- MODO AUTOMÁTICO ----------
+    // MODO AUTOMÁTICO: actualizar estado y publicar
     registro.estado = estado;
     registro.estadoActual = 'automatico';
     if (estado) registro.ultimaActivacion = ahora;
     else registro.ultimaDesactivacion = ahora;
     await this.psiculturaRepo.save(registro);
 
-    console.log(`🟨 [AUTO] CAMBIO AUTOMÁTICO ID:${id} estado:${estado}`);
+    this.mqttService.publishSignals(estado, !estado);
 
-    return {
-      ok: true,
-      estado: registro.estado,
-      estadoActual: registro.estadoActual,
-    };
+    return { ok: true, estado: registro.estado, estadoActual: registro.estadoActual };
   }
 
+async handleBrokerPayload(id: number, payload: string) {
+  const value = payload === '1' || payload === 'true';
 
+  const registro = await this.psiculturaRepo.findOne({ where: { id } });
+  if (!registro) throw new HttpException('Registro no encontrado', 404);
 
-  async handleBrokerPayload(id: number, payload: string) {
-    const value = payload === '1' || payload === 'true' || payload === 'True';
-    const registro = await this.psiculturaRepo.findOne({ where: { id } });
-    if (!registro) throw new HttpException('Registro no encontrado', 404);
+  // Guardamos TAL CUAL llega del broker
+  registro.topic = payload;
+
+    // Broker payloads se tratan como manual (según tu regla)
     registro.estado = value;
     registro.estadoActual = 'manual';
     if (value) registro.ultimaActivacion = new Date();
     else registro.ultimaDesactivacion = new Date();
     await this.psiculturaRepo.save(registro);
+
+    if (value) {
+      const abierto = await this.buscarHistorialAbierto(id);
+      if (!abierto) {
+        const h = this.historialRepo.create({
+          psicultura: registro,
+          estado: true,
+          inicio: new Date(),
+          fin: null,
+          tiempoMs: null,
+          modo: 'manual',
+          fechaCreacion: new Date(),
+        });
+        await this.historialRepo.save(h);
+      }
+    } else {
+      const abierto = await this.buscarHistorialAbierto(id);
+      if (abierto) {
+        const fin = new Date();
+        abierto.fin = fin;
+        abierto.tiempoMs = fin.getTime() - abierto.inicio.getTime();
+        await this.historialRepo.save(abierto);
+      }
+    }
+
     return { estado: registro.estado };
   }
 
@@ -422,19 +342,16 @@ let cerradoInfo: { historialIdClosed: number; tiempoManualMs: number } | null = 
   async handleBrokerRestored(id: number) {
     const registro = await this.psiculturaRepo.findOne({ where: { id } });
     if (!registro) throw new HttpException('Registro no encontrado', 404);
-    const nuevo = this.psiculturaRepo.create({
-      url: registro.url,
-      usuario: registro.usuario,
-      contrasena: registro.contrasena,
-      tiempoEncendido: registro.tiempoEncendido,
-      tiempoApagado: registro.tiempoApagado,
-      estado: false,
-      estadoActual: 'inactivo',
-      modo: registro.modo
-    });
-    const guardado = await this.psiculturaRepo.save(nuevo);
-    this.iniciarCicloAutomatico(guardado.id);
-    return { ok: true, id: guardado.id };
+
+    registro.estado = false;
+    registro.estadoActual = 'inactivo';
+    await this.psiculturaRepo.save(registro);
+
+    if (registro.modo === 'auto') {
+      await this.iniciarCicloAutomatico(id);
+    }
+
+    return { ok: true, id };
   }
 
   async reportPowerLoss(id: number) {
@@ -453,5 +370,9 @@ let cerradoInfo: { historialIdClosed: number; tiempoManualMs: number } | null = 
     registro.estadoActual = 'power_restored_no_activity';
     await this.psiculturaRepo.save(registro);
     return { ok: true };
+  }
+
+  async toggleManual(id: number, estado: boolean) {
+    return this.cambiarEstado(id, estado, true);
   }
 }

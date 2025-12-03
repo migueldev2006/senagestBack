@@ -335,28 +335,20 @@ async function seed() {
     });
 
     await psiculturaRepo.save({
-      url: '192.168.4.115',
-      usuario: 'Robert',
-      contrasena: 'Senawil1234',
+      url: 'mqtts://3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud:8883',
+      usuario: 'diegokld',
+      contrasena: 'Don_diego123',
       tiempoEncendido: '00:00:30',
       tiempoApagado: '00:00:10',
       estado: true,
-      estadoActual: 'inactivo',
+      estadoActual: 'automatico',
       fechaCreacion:new Date(),
       fechaActualizacion:new Date(),
       modo: 'auto',
       usuarios: { id: 1 },
     });
 
-    await psiculturaHistorialRepo.save({
-      psicultura: { id: 1 },
-      inicio: new Date(),
-      fin: null, // historial abierto
-      estado: true, // está encendido
-      modo: 'auto', // modo actual
-      tiempoMs: 0, // inicia en 0
-      fechaCreacion:new Date()
-    });
+
 
     console.log('SEED COMPLETO EJECUTADO ✔');
     process.exit();

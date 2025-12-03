@@ -1,9 +1,8 @@
+// File: src/psicultura/psicultura.controller.ts
 import { Controller, Post, Body, Param, Get, Patch } from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
-import { CreatePsiculturaDto, TimerDto, ValidarBrokerDto } from './dto';
+import { TimerDto, ValidarBrokerDto } from './dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
-import { enviarEstado } from '../Broker/brokerClient'; 
-
 
 @Controller('psicultura')
 export class PsiculturaController {
@@ -14,9 +13,11 @@ export class PsiculturaController {
     return this.service.validarBroker(dto);
   }
 
+  // NOTA: id puede ser null en frontend si quieres crear nuevo timer; aqui usamos string parse
   @Patch(':id/timer')
-  actualizarTimer(@Param('id') id: number, @Body() dto: TimerDto) {
-    return this.service.actualizarTimer(Number(id), dto);
+  actualizarTimer(@Param('id') id: string, @Body() dto: TimerDto) {
+    const parsedId = id === 'null' || id === 'new' ? null : Number(id);
+    return this.service.actualizarTimer(parsedId, dto);
   }
 
   @Get('info')
@@ -28,6 +29,7 @@ export class PsiculturaController {
   getHistorial(@Param('id') id: number) {
     return this.service.getHistorial(Number(id));
   }
+
   @Get('historial')
   getHistorialInfo() {
     return this.service.getHistorialInfo();
@@ -69,11 +71,7 @@ export class PsiculturaController {
   }
 
   @Patch(':id/manual')
-toggleManual(
-  @Param('id') id: number,
-  @Body() body: CambiarEstadoDto,
-) {
-  return this.service.toggleManual(Number(id), Boolean(body.activo));
-}
-
+  toggleManual(@Param('id') id: number, @Body() body: CambiarEstadoDto) {
+    return this.service.toggleManual(Number(id), Boolean(body.activo));
+  }
 }
