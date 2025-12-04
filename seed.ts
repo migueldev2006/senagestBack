@@ -334,19 +334,6 @@ async function seed() {
       img: 'defaultpfp.png',
     });
 
-    await psiculturaRepo.save({
-      url: 'mqtts://3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud:8883',
-      usuario: 'diegokld',
-      contrasena: 'Don_diego123',
-      tiempoEncendido: '00:00:30',
-      tiempoApagado: '00:00:10',
-      estado: true,
-      estadoActual: 'automatico',
-      fechaCreacion:new Date(),
-      fechaActualizacion:new Date(),
-      modo: 'auto',
-      usuarios: { id: 1 },
-    });
 
 
 
