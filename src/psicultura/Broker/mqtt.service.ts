@@ -99,7 +99,7 @@ export class MqttService implements OnModuleInit {
         if (Array.isArray(infos) && infos.length > 0) {
           await psiculturaService.handleBrokerPayload(
             Number(infos[0].id),
-            String(parsed),
+            parsed,
             topic,
           );
         }
