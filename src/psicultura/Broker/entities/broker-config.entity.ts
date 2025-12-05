@@ -25,4 +25,5 @@ export class BrokerConfig {
 
   @Column({ type: "timestamp", default: () => "NOW()" })
   updated_at: Date;
+  tls: any;
 }

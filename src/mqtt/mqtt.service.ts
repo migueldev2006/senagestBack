@@ -1,21 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
 
 @Injectable()
-export class MqttService {
+export class MqttService implements OnModuleInit {
   publishSignals(arg0: boolean, arg1: boolean) {
-    throw new Error('Method not implemented.');
-  }
-  waitForConnection() {
     throw new Error('Method not implemented.');
   }
   private readonly logger = new Logger(MqttService.name);
   private client: MqttClient | null = null;
 
   private HOST = '';
-  private PORT = 0;
+  private PORT = 8883; // Puerto MQTT TLS
   private USER = '';
   private PASS = '';
   private TOPIC_SIGNALS = 'lab/diego/signals';
@@ -37,8 +34,9 @@ export class MqttService {
       return;
     }
 
-    this.HOST = cfg.url;
-    this.PORT = cfg.port;
+    // Datos que te proporcionaron
+    this.HOST = cfg.url; // ej: 3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud
+    this.PORT = 8883;    // TLS MQTT
     this.USER = cfg.username;
     this.PASS = cfg.password;
 
@@ -56,11 +54,11 @@ export class MqttService {
     this.client = mqtt.connect({
       host: this.HOST,
       port: this.PORT,
-      protocol: 'mqtts',
+      protocol: 'mqtts', // importante: usar mqtts para TLS
       username: this.USER,
       password: this.PASS,
       reconnectPeriod: 2000,
-      rejectUnauthorized: false,
+      rejectUnauthorized: false, // si no tienes certificado válido
     });
 
     this.client.on('connect', () => {
@@ -73,7 +71,7 @@ export class MqttService {
     });
 
     this.client.on('error', (err) => this.logger.error('MQTT error', err.message));
-    this.client.on('close', () => this.logger.warn('MQTT cerrado'));
+    this.client.on('close', () => this.logger.warn('MQTT cerrado — esperando reconexión automática'));
   }
 
   disconnect() {
@@ -90,5 +88,18 @@ export class MqttService {
 
   publish(topic: string, message: any) {
     this.client?.publish(topic, JSON.stringify(message));
+  }
+
+  async waitForConnection(timeout = 5000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.client?.connected) return resolve();
+
+      const timer = setTimeout(() => reject(new Error('MQTT no se conectó a tiempo')), timeout);
+
+      this.client?.once('connect', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 }
