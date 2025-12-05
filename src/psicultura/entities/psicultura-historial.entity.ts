@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Psicultura } from './psicultura.entity';
 
 @Entity('psicultura_historial')
@@ -11,10 +17,10 @@ export class PsiculturaHistorial {
   psicultura: Psicultura;
 
   @Column({ type: 'boolean' })
-  estado: boolean; // estado que empezó (ON=true / OFF=false)
+  estado: boolean;
 
   @Column({ type: 'bigint', nullable: true })
-  tiempoMs: number | null; // null hasta que se cierre
+  tiempoMs: number | null;
 
   @Column({ type: 'timestamp' })
   inicio: Date;
@@ -25,6 +31,6 @@ export class PsiculturaHistorial {
   @Column({ type: 'varchar', length: 20, default: 'manual' })
   modo: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   fechaCreacion: Date;
 }

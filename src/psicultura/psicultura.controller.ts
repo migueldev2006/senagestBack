@@ -1,21 +1,25 @@
-// File: src/psicultura/psicultura.controller.ts
-import { Controller, Post, Body, Param, Get, Patch, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Get,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
-import { TimerDto, ValidarBrokerDto } from './dto';
+import { TimerDto } from './dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 
 @Controller('psicultura')
 export class PsiculturaController {
   constructor(private readonly service: PsiculturaService) {}
 
-  @Post('validar')
-  validarBroker(@Body() dto: ValidarBrokerDto) {
-    return this.service.validarBroker(dto);
-  }
 
-  // NOTA: id puede ser null en frontend si quieres crear nuevo timer; aqui usamos string parse
-  @Patch(':id/timer')
-  actualizarTimer(@Param('id') id: string, @Body() dto: TimerDto) {
+  @Post(':id/timer')
+  actualizarTimer(
+    @Param('id') id: string,
+    @Body() dto: TimerDto,
+  ) {
     const parsedId = id === 'null' || id === 'new' ? null : Number(id);
     return this.service.actualizarTimer(parsedId, dto);
   }
@@ -26,8 +30,8 @@ export class PsiculturaController {
   }
 
   @Get(':id/historial')
-  getHistorial(@Param('id') id: number) {
-    return this.service.getHistorial(Number(id));
+  getHistorial(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getHistorial(id);
   }
 
   @Get('historial')
@@ -36,61 +40,51 @@ export class PsiculturaController {
   }
 
   @Get(':id/estado')
-  obtenerEstado(@Param('id') id: number) {
-    return this.service.obtenerEstado(Number(id));
+  obtenerEstado(@Param('id', ParseIntPipe) id: number) {
+    return this.service.obtenerEstado(id);
   }
 
-  @Patch(':id/estado')
-  cambiarEstado(@Param('id') id: number, @Body() body: CambiarEstadoDto) {
-    return this.service.cambiarEstado(Number(id), Boolean(body.activo), Boolean(body.manual));
-  }
-
-  @Post(':id/broker-payload')
-  brokerPayload(
-    @Param('id') id: number,
-    @Body() body: { payload: string; topic?: string },
+  @Post(':id/estado')
+  cambiarEstado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: CambiarEstadoDto,
   ) {
-    return this.service.handleBrokerPayload(Number(id), body.payload, body.topic);
+    return this.service.cambiarEstado({
+      psiculturaId: id,
+      estado: Boolean(body.activo),
+      manual: Boolean(body.manual),
+    });
+  }
+
+  @Post(':id/manual')
+  toggleManual(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: CambiarEstadoDto,
+  ) {
+    return this.service.cambiarEstado({
+      psiculturaId: id,
+      estado: Boolean(body.activo),
+      manual: true,
+    });
   }
 
   @Post(':id/broker/lost')
-  brokerLost(@Param('id') id: number) {
-    return this.service.handleBrokerConnectionLost(Number(id));
+  brokerLost(@Param('id', ParseIntPipe) id: number) {
+    return this.service.handleBrokerConnectionLost(id);
   }
 
   @Post(':id/broker/restored')
-  brokerRestored(@Param('id') id: number) {
-    return this.service.handleBrokerRestored(Number(id));
+  brokerRestored(@Param('id', ParseIntPipe) id: number) {
+    return this.service.handleBrokerRestored(id);
   }
 
   @Post(':id/power/loss')
-  powerLoss(@Param('id') id: number) {
-    return this.service.reportPowerLoss(Number(id));
+  powerLoss(@Param('id', ParseIntPipe) id: number) {
+    return this.service.reportPowerLoss(id);
   }
 
   @Post(':id/power/restore')
-  powerRestore(@Param('id') id: number) {
-    return this.service.reportPowerRestore(Number(id));
-  }
-
-  @Patch(':id/manual')
-  toggleManual(@Param('id') id: number, @Body() body: CambiarEstadoDto) {
-    return this.service.toggleManual(Number(id), Boolean(body.activo));
-  }
-
-  @Get(':id/datos-guardados')
-  obtenerDatosGuardados(
-    @Param('id') id: number,
-    @Query('limite') limite?: number,
-  ) {
-    return this.service.obtenerDatosGuardados(Number(id), limite || 100);
-  }
-
-  @Get(':id/estadisticas-datos')
-  obtenerEstadisticas(
-    @Param('id') id: number,
-    @Query('horas') horas?: number,
-  ) {
-    return this.service.obtenerEstadisticas(Number(id), horas || 24);
+  powerRestore(@Param('id', ParseIntPipe) id: number) {
+    return this.service.reportPowerRestore(id);
   }
 }

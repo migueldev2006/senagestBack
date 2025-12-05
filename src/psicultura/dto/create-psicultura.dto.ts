@@ -1,14 +1,6 @@
 import { IsString, IsOptional, IsBoolean, IsNumber } from 'class-validator'
 
 export class CreatePsiculturaDto {
-  @IsString()
-  url: string
-
-  @IsString()
-  usuario: string
-
-  @IsString()
-  contrasena: string
 
   @IsOptional()
   @IsString()
@@ -19,7 +11,7 @@ export class CreatePsiculturaDto {
   tiempoApagado?: string
 
   @IsNumber()
-  usuarioId: number
+  usuarios: number
 
   @IsOptional()
   @IsBoolean()
