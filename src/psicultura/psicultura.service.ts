@@ -11,7 +11,7 @@ import { Psicultura } from './entities/psicultura.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { PsiculturaData } from './entities/psicultura-data.entity';
 import { TimerDto, ValidarBrokerDto } from './dto';
-import { MqttService } from './Broker/mqtt.service';
+import { MqttService } from '../mqtt/mqtt.service';
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {

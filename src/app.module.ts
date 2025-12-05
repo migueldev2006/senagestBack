@@ -15,7 +15,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PsiculturaModule } from './psicultura/psicultura.module';
 import { RootController } from './root.controller';
 import { PsiculturaData } from './psicultura/entities/psicultura-data.entity';
-
+import { MqttModule } from './mqtt/mqtt.module';
 console.log('🚀 Variables de entorno:');
 console.log('HOST:', process.env.HOST);
 console.log('DB_PORT:', process.env.DB_PORT);
@@ -51,6 +51,7 @@ console.log('PASSWORD:', process.env.PASSWORD);
     RutasModule,
     FichasModule,
     PsiculturaModule,
+    MqttModule
   ],
   controllers: [RootController],
 })
