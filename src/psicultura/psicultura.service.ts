@@ -12,6 +12,7 @@ import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { PsiculturaData } from './entities/psicultura-data.entity';
 import { TimerDto, ValidarBrokerDto } from './dto';
 import { MqttService } from '../mqtt/mqtt.service';
+import { BrokerConfigService } from './Broker/broker-config.service';
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
@@ -490,38 +491,26 @@ async cambiarEstado(id: number, estado: boolean, manual = false) {
     // ---------------------------------------------------
     // 1) AUTOMÁTICO: JSON CON CMD
     // ---------------------------------------------------
-   if (parsed && !parsed.cmd) {
-  console.log('📡 Datos de SENSORES detectados');
+    if (parsed && !parsed.cmd) {
+      console.log('📡 Datos de SENSORES detectados');
 
-  try {
-    const row = this.dataRepo.create({
-      psicultura: registro,
-      topico: topic ?? registro.topic ?? '',
+      try {
+        const row = this.dataRepo.create({
+          psicultura: registro,
+          estado: false, // Default value
+          fechaCreacion: new Date(),
+        });
 
-      // ✔ Guardamos payload como JSON string → evita [object Object]
-      payload: JSON.stringify(payload),
+        await this.dataRepo.save(row);
 
-      // ✔ Guardamos jsonb para consultas internas en Postgres
-      dataParsed: parsed,
+        console.log('💾 Datos guardados en BD:', row.id);
+      } catch (err) {
+        console.log('❌ Error guardando datos:', err?.message);
+        this.logger.error('Error guardando datos', err?.message);
+      }
 
-      temperatura: parsed.temp ?? parsed.temperatura ?? null,
-      humedad: parsed.humedad ?? parsed.humidity ?? null,
-      oxigeno: parsed.o2 ?? parsed.oxigeno ?? null,
-      ph: parsed.ph ?? null,
-      conductividad: parsed.ec ?? parsed.conductividad ?? null,
-      fechaCreacion: new Date(),
-    });
-
-    await this.dataRepo.save(row);
-
-    console.log('💾 Sensores guardados en BD:', row.id);
-  } catch (err) {
-    console.log('❌ Error guardando sensores:', err?.message);
-    this.logger.error('Error sensores', err?.message);
-  }
-
-  return { estado: registro.estado, modo: registro.estadoActual };
-}
+      return { estado: registro.estado, modo: registro.estadoActual };
+    }
 
     // ---------------------------------------------------
     // 2) JSON DE SENSORES (SIN cmd)
@@ -536,31 +525,16 @@ if (parsed && !parsed.cmd) {
   try {
     const row = this.dataRepo.create({
       psicultura: registro,
-      topico: topic ?? registro.topic ?? '',
-
-      // ❌ MAL — causa "[object Object]"
-      // payload,
-
-      // ✔ FIX → guardar JSON real en texto
-      payload: JSON.stringify(payload),
-
-      // ✔ FIX jsonb
-      dataParsed: parsed,
-
-      temperatura: parsed.temp ?? parsed.temperatura ?? null,
-      humedad: parsed.humedad ?? parsed.humidity ?? null,
-      oxigeno: parsed.o2 ?? parsed.oxigeno ?? null,
-      ph: parsed.ph ?? null,
-      conductividad: parsed.ec ?? parsed.conductividad ?? null,
+      estado: false, // Default value
       fechaCreacion: new Date(),
     });
 
     await this.dataRepo.save(row);
 
-    console.log('💾 Sensores guardados en BD:', row.id);
+    console.log('💾 Datos guardados en BD:', row.id);
   } catch (err) {
-    console.log('❌ Error guardando sensores:', err?.message);
-    this.logger.error('Error sensores', err?.message);
+    console.log('❌ Error guardando datos:', err?.message);
+    this.logger.error('Error guardando datos', err?.message);
   }
 
   return { estado: registro.estado, modo: registro.estadoActual };
@@ -722,10 +696,6 @@ if (parsed && !parsed.cmd) {
 
     if (filtrados.length === 0) {
       return {
-        temperatura: null,
-        humedad: null,
-        oxigeno: null,
-        ph: null,
         totalRegistros: 0,
       };
     }
@@ -741,11 +711,6 @@ if (parsed && !parsed.cmd) {
     };
 
     return {
-      temperatura: calcularStats(filtrados.map((d) => d.temperatura)),
-      humedad: calcularStats(filtrados.map((d) => d.humedad)),
-      oxigeno: calcularStats(filtrados.map((d) => d.oxigeno)),
-      ph: calcularStats(filtrados.map((d) => d.ph)),
-      conductividad: calcularStats(filtrados.map((d) => d.conductividad)),
       totalRegistros: filtrados.length,
     };
   }

@@ -1,4 +1,5 @@
 import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { BrokerConfig } from '../Broker/entities/broker-config.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -69,6 +70,9 @@ export class Psicultura {
 
   @ManyToOne(() => Usuario, (usuario) => usuario.psiculturas)
   usuarios: Usuario;
+
+  @ManyToOne(() => BrokerConfig, (brokerConfig) => brokerConfig.psiculturas)
+  brokerConfig: BrokerConfig;
 
   // relation to historial
   @OneToMany(() => PsiculturaHistorial, (h) => h.psicultura)

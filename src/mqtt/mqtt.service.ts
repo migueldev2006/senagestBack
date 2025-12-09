@@ -12,10 +12,10 @@ export class MqttService implements OnModuleInit {
   private client: MqttClient | null = null;
 
   private HOST = '';
-  private PORT = 8883; // Puerto MQTT TLS
+  private PORT = 0;
   private USER = '';
   private PASS = '';
-  private TOPIC_SIGNALS = 'lab/diego/signals';
+  private TOPIC_SIGNALS = '';
 
   constructor(
     private readonly configService: BrokerConfigService,
@@ -51,6 +51,11 @@ export class MqttService implements OnModuleInit {
       return;
     }
 
+    if (!this.HOST || !this.PORT || !this.USER || !this.PASS) {
+      this.logger.warn('Configuración MQTT incompleta, no se conecta.');
+      return;
+    }
+
     this.client = mqtt.connect({
       host: this.HOST,
       port: this.PORT,
@@ -64,10 +69,12 @@ export class MqttService implements OnModuleInit {
     this.client.on('connect', () => {
       this.logger.log('✅ MQTT backend conectado');
 
-      this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-        if (err) this.logger.error('Error suscribiéndose a tópico', err.message);
-        else this.logger.log(`📡 Suscrito a ${this.TOPIC_SIGNALS}`);
-      });
+      if (this.TOPIC_SIGNALS) {
+        this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
+          if (err) this.logger.error('Error suscribiéndose a tópico', err.message);
+          else this.logger.log(`📡 Suscrito a ${this.TOPIC_SIGNALS}`);
+        });
+      }
     });
 
     this.client.on('error', (err) => this.logger.error('MQTT error', err.message));
@@ -87,7 +94,11 @@ export class MqttService implements OnModuleInit {
   }
 
   publish(topic: string, message: any) {
-    this.client?.publish(topic, JSON.stringify(message));
+    if (!this.client?.connected) {
+      this.logger.warn('MQTT no conectado, no se puede publicar.');
+      return;
+    }
+    this.client.publish(topic, JSON.stringify(message));
   }
 
   async waitForConnection(timeout = 5000): Promise<void> {
