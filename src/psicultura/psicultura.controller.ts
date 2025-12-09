@@ -5,6 +5,7 @@ import {
   Param,
   Get,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { PsiculturaService } from './psicultura.service';
 import { TimerDto } from './dto';
@@ -86,5 +87,21 @@ export class PsiculturaController {
   @Post(':id/power/restore')
   powerRestore(@Param('id', ParseIntPipe) id: number) {
     return this.service.reportPowerRestore(id);
+  }
+
+    @Get(':id/datos-guardados')
+  obtenerDatosGuardados(
+    @Param('id') id: number,
+    @Query('limite') limite?: number,
+  ) {
+    return this.service.obtenerDatosGuardados(Number(id), limite || 100);
+  }
+
+  @Get(':id/estadisticas-datos')
+  obtenerEstadisticas(
+    @Param('id') id: number,
+    @Query('horas') horas?: number,
+  ) {
+    return this.service.obtenerEstadisticas(Number(id), horas || 24);
   }
 }

@@ -37,6 +37,7 @@ console.log('PASSWORD:', process.env.PASSWORD);
       entities: [__dirname + '/**/*.entity.{ts,js}'],
       autoLoadEntities: true,
       synchronize:true,
+      migrationsRun:true,
       // dropSchema:true
     }),
     TypeOrmModule.forFeature([PsiculturaData]),

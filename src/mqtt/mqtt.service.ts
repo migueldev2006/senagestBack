@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
@@ -9,15 +9,18 @@ interface PendingMessage {
 }
 
 @Injectable()
-export class MqttService {
+export class MqttService implements OnModuleInit {
+  publishSignals(arg0: boolean, arg1: boolean) {
+    throw new Error('Method not implemented.');
+  }
   private readonly logger = new Logger(MqttService.name);
   private client: MqttClient | null = null;
 
   private HOST = '';
-  private PORT = 0;
+  private PORT = 8883; // Puerto MQTT TLS
   private USER = '';
   private PASS = '';
-  private TOPIC_SIGNALS = 'lab/diego/signals'
+  private TOPIC_SIGNALS = 'lab/diego/signals';
 
   private pendingMessages: PendingMessage[] = [];
 
@@ -38,12 +41,15 @@ export class MqttService {
       return;
     }
 
-    this.HOST = cfg.url;
-    this.PORT = cfg.port;
+    // Datos que te proporcionaron
+    this.HOST = cfg.url; // ej: 3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud
+    this.PORT = 8883; // TLS MQTT
     this.USER = cfg.username;
     this.PASS = cfg.password;
 
-    this.logger.log(`🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`);
+    this.logger.log(
+      `🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`,
+    );
     this.connect();
   }
 
@@ -56,11 +62,11 @@ export class MqttService {
     this.client = mqtt.connect({
       host: this.HOST,
       port: this.PORT,
-      protocol: 'mqtts',
+      protocol: 'mqtts', // importante: usar mqtts para TLS
       username: this.USER,
       password: this.PASS,
-      reconnectPeriod: 2000, // reintento cada 2s
-      rejectUnauthorized: false, // para certificados autofirmados
+      reconnectPeriod: 2000,
+      rejectUnauthorized: false, // si no tienes certificado válido
     });
 
     this.client.on('connect', () => {
@@ -68,15 +74,18 @@ export class MqttService {
       this.flushPendingMessages();
 
       this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-        if (err) this.logger.error('Error suscribiéndose a tópico', err.message);
+        if (err)
+          this.logger.error('Error suscribiéndose a tópico', err.message);
         else this.logger.log(`📡 Suscrito a ${this.TOPIC_SIGNALS}`);
       });
     });
 
-    this.client.on('error', (err) => this.logger.error('MQTT error', err.message));
-    this.client.on('close', () => this.logger.warn('MQTT cerrado'));
-    this.client.on('offline', () => this.logger.warn('MQTT offline'));
-    this.client.on('reconnect', () => this.logger.log('MQTT reconectando...'));
+    this.client.on('error', (err) =>
+      this.logger.error('MQTT error', err.message),
+    );
+    this.client.on('close', () =>
+      this.logger.warn('MQTT cerrado — esperando reconexión automática'),
+    );
   }
 
   disconnect() {
@@ -92,29 +101,32 @@ export class MqttService {
   }
 
   publish(topic: string, message: any) {
-    if (this.client?.connected) {
-      this.client.publish(topic, JSON.stringify(message), (err) => {
-        if (err) this.logger.error(`Error publicando en ${topic}`, err.message);
-        else this.logger.log(`MQTT publicado -> ${topic}: ${JSON.stringify(message)}`);
-      });
-    } else {
-      // Guardamos el mensaje para enviarlo cuando se reconecte
-      this.pendingMessages.push({ topic, payload: message });
-      this.logger.warn(`MQTT NO conectado, mensaje agregado a buffer: ${topic}`);
-    }
+    this.client?.publish(topic, JSON.stringify(message));
   }
 
   private flushPendingMessages() {
-    if (!this.client?.connected) return;
-    this.logger.log(`Enviando ${this.pendingMessages.length} mensajes pendientes...`);
-    while (this.pendingMessages.length > 0) {
-      const msg = this.pendingMessages.shift();
-      if (msg) {
-        this.client.publish(msg.topic, JSON.stringify(msg.payload), (err) => {
-          if (err) this.logger.error(`Error publicando pendiente ${msg.topic}`, err.message);
-          else this.logger.log(`Mensaje pendiente enviado -> ${msg.topic}`);
-        });
-      }
+    if (!this.client || !this.client.connected) return;
+
+    for (const msg of this.pendingMessages) {
+      this.client.publish(msg.topic, JSON.stringify(msg.payload));
     }
+
+    this.pendingMessages = [];
+  }
+  
+  async waitForConnection(timeout = 5000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.client?.connected) return resolve();
+
+      const timer = setTimeout(
+        () => reject(new Error('MQTT no se conectó a tiempo')),
+        timeout,
+      );
+
+      this.client?.once('connect', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 }

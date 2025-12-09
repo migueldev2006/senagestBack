@@ -323,7 +323,7 @@ async function seed() {
 
     // 8) Usuario administrador
     const hashedPassword = await bcrypt.hash('admin123', 10);
-    await usuarioRepo.save({
+    const AdminUser = await usuarioRepo.save({
       identificacion: '1081729282',
       primerNombre: 'Admin',
       primerApellido: 'Account',
@@ -334,7 +334,31 @@ async function seed() {
       img: 'defaultpfp.png',
     });
 
+    const PsiculturaDefault = await psiculturaRepo.save({});
+    Object.assign( PsiculturaDefault, {
+      tiempoEncendido: '00:00:00',
+      tiempoApagado: '00:00:00',
+      tiempoManualMs: null,
 
+      estado: true,
+      estadoActual: 'inactivo',
+      modo: 'auto',
+
+      ultimaActivacion: null,
+      ultimaDesactivacion: null,
+
+      conexionBroker: true,
+      fechaFalloConexion: null,
+      fechaRestablecidaConexion: null,
+
+      energiaEstable: true,
+      fechaFalloEnergia: null,
+      fechaRestablecidaEnergia: null,
+
+      usuarios: AdminUser, 
+    })
+
+    await psiculturaRepo.save(PsiculturaDefault);
 
 
     console.log('SEED COMPLETO EJECUTADO ✔');
