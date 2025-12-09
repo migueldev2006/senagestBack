@@ -9,6 +9,8 @@ import { IsNull, Not, Repository } from 'typeorm';
 import { Psicultura } from './entities/psicultura.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { TimerDto } from './dto';
+import { MqttService } from 'src/mqtt/mqtt.service';
+
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
@@ -25,7 +27,14 @@ export class PsiculturaService implements OnModuleInit {
 
     @InjectRepository(PsiculturaHistorial)
     private readonly historialRepo: Repository<PsiculturaHistorial>,
+
+    private readonly mqttService: MqttService, // <-- inyectamos MQTT
   ) {}
+
+  private publicarMQTT(id: number, payload: any) {
+    this.mqttService.publish(`psicultura/${id}/estado`, payload);
+    this.logger.log(`MQTT publicado -> psicultura/${id}/estado: ${JSON.stringify(payload)}`);
+  }
 
   async onModuleInit() {
     const ultimo = await this.psiculturaRepo.findOne({
@@ -71,7 +80,6 @@ export class PsiculturaService implements OnModuleInit {
       return;
     }
 
-    // Cancelar cualquier ciclo previo
     if (this.ciclos[id]) {
       const val = this.ciclos[id];
       if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
@@ -82,7 +90,6 @@ export class PsiculturaService implements OnModuleInit {
     const encenderMs = this.convertirAms(registro.tiempoEncendido);
     const apagarMs = this.convertirAms(registro.tiempoApagado);
 
-    // Iniciar con el estado definido
     if (startEncendido) {
       registro.estado = true;
       registro.estadoActual = 'automatico';
@@ -95,7 +102,8 @@ export class PsiculturaService implements OnModuleInit {
       await this.psiculturaRepo.save(registro);
     }
 
-    // Programar apagado si estaba encendido
+    this.publicarMQTT(id, { estado: registro.estado, modo: 'automatico' });
+
     if (startEncendido && encenderMs > 0) {
       const timeout = setTimeout(async () => {
         const r = await this.psiculturaRepo.findOne({ where: { id } });
@@ -106,7 +114,8 @@ export class PsiculturaService implements OnModuleInit {
         r.ultimaDesactivacion = new Date();
         await this.psiculturaRepo.save(r);
 
-        // Una vez apagado, el ciclo termina, NO se reinicia
+        this.publicarMQTT(id, { estado: r.estado, modo: 'automatico' });
+
         delete this.ciclos[id];
       }, encenderMs);
 
@@ -148,6 +157,8 @@ export class PsiculturaService implements OnModuleInit {
     const guardado = await this.psiculturaRepo.save(nuevo);
     await this.iniciarCicloAutomatico(guardado.id, true);
 
+    this.publicarMQTT(guardado.id, { estado: true, modo: 'automatico' });
+
     return {
       ok: true,
       message: 'Nuevo timer creado y ciclo iniciado',
@@ -185,97 +196,92 @@ export class PsiculturaService implements OnModuleInit {
     }
   }
 
-async cambiarEstado(dto: {
-  psiculturaId: number;
-  estado: boolean;
-  manual?: boolean;
-}) {
-  const { psiculturaId, estado, manual = false } = dto;
-  const ahora = new Date();
+  async cambiarEstado(dto: {
+    psiculturaId: number;
+    estado: boolean;
+    manual?: boolean;
+  }) {
+    const { psiculturaId, estado, manual = false } = dto;
+    const ahora = new Date();
 
-  const registro = await this.psiculturaRepo.findOne({ where: { id: psiculturaId } });
-  if (!registro) throw new HttpException('Psicultura no encontrada', 404);
+    const registro = await this.psiculturaRepo.findOne({ where: { id: psiculturaId } });
+    if (!registro) throw new HttpException('Psicultura no encontrada', 404);
 
-  // Cancelar cualquier ciclo automático previo
-  this.cancelarTodosLosCiclos();
+    this.cancelarTodosLosCiclos();
 
-  // Cerrar historial abierto
-  const historialAbierto = await this.historialRepo.findOne({
-    where: { psicultura: { id: psiculturaId } as any, fin: IsNull() },
-    order: { id: 'DESC' },
-  });
-  if (historialAbierto) {
-    historialAbierto.fin = ahora;
-    historialAbierto.tiempoMs = ahora.getTime() - historialAbierto.inicio.getTime();
-    await this.historialRepo.save(historialAbierto);
-  }
-if (manual) {
-  // Guardar historial manual
-  const nuevoHistorial = this.historialRepo.create({
-    psicultura: registro,
-    estado,
-    inicio: ahora,
-    fin: null,
-    tiempoMs: null,
-    modo: 'manual',
-    fechaCreacion: ahora,
-  });
-  await this.historialRepo.save(nuevoHistorial);
-
-  // Actualizar el registro original para reflejar toggle manual
-  registro.estado = estado;
-  registro.estadoActual = 'manual';
-  registro.ultimaActivacion = estado ? ahora : registro.ultimaActivacion;
-  registro.ultimaDesactivacion = !estado ? ahora : registro.ultimaDesactivacion;
-
-  await this.psiculturaRepo.save(registro);
-
-  return { ok: true, estado };
-}
-
- else {
-    // --- AUTOMÁTICO (una sola vez) ---
-    const nuevoAuto = this.psiculturaRepo.create();
-    Object.assign(nuevoAuto, {
-      tiempoEncendido: registro.tiempoEncendido,
-      tiempoApagado: registro.tiempoApagado,
-      estado: true, // empieza encendido
-      estadoActual: 'automatico',
-      modo: 'auto',
-      ultimaActivacion: ahora,
-      ultimaDesactivacion: null,
+    const historialAbierto = await this.historialRepo.findOne({
+      where: { psicultura: { id: psiculturaId } as any, fin: IsNull() },
+      order: { id: 'DESC' },
     });
+    if (historialAbierto) {
+      historialAbierto.fin = ahora;
+      historialAbierto.tiempoMs = ahora.getTime() - historialAbierto.inicio.getTime();
+      await this.historialRepo.save(historialAbierto);
+    }
 
-    const guardado = await this.psiculturaRepo.save(nuevoAuto);
+    if (manual) {
+      const nuevoHistorial = this.historialRepo.create({
+        psicultura: registro,
+        estado,
+        inicio: ahora,
+        fin: null,
+        tiempoMs: null,
+        modo: 'manual',
+        fechaCreacion: ahora,
+      });
+      await this.historialRepo.save(nuevoHistorial);
 
-    // Ejecutar ciclo automático UNA sola vez y terminar
-    const encenderMs = this.convertirAms(guardado.tiempoEncendido);
-    const apagarMs = this.convertirAms(guardado.tiempoApagado);
+      registro.estado = estado;
+      registro.estadoActual = 'manual';
+      registro.ultimaActivacion = estado ? ahora : registro.ultimaActivacion;
+      registro.ultimaDesactivacion = !estado ? ahora : registro.ultimaDesactivacion;
 
-    // Encendido inicial
-    setTimeout(async () => {
-      const r = await this.psiculturaRepo.findOne({ where: { id: guardado.id } });
-      if (!r) return;
-      r.estado = false;
-      r.estadoActual = 'automatico';
-      r.ultimaDesactivacion = new Date();
-      await this.psiculturaRepo.save(r);
-    }, encenderMs); // se apaga después del tiempo de encendido
+      await this.psiculturaRepo.save(registro);
 
-    return {
-      ok: true,
-      estado: true,
-      modo: 'automatico',
-      nuevoId: guardado.id,
-    };
+      this.publicarMQTT(psiculturaId, { estado, modo: 'manual' });
+
+      return { ok: true, estado };
+    } else {
+      const nuevoAuto = this.psiculturaRepo.create();
+      Object.assign(nuevoAuto, {
+        tiempoEncendido: registro.tiempoEncendido,
+        tiempoApagado: registro.tiempoApagado,
+        estado: true,
+        estadoActual: 'automatico',
+        modo: 'auto',
+        ultimaActivacion: ahora,
+        ultimaDesactivacion: null,
+      });
+
+      const guardado = await this.psiculturaRepo.save(nuevoAuto);
+
+      this.publicarMQTT(guardado.id, { estado: true, modo: 'automatico' });
+
+      const encenderMs = this.convertirAms(guardado.tiempoEncendido);
+
+      setTimeout(async () => {
+        const r = await this.psiculturaRepo.findOne({ where: { id: guardado.id } });
+        if (!r) return;
+        r.estado = false;
+        r.estadoActual = 'automatico';
+        r.ultimaDesactivacion = new Date();
+        await this.psiculturaRepo.save(r);
+
+        this.publicarMQTT(r.id, { estado: false, modo: 'automatico' });
+      }, encenderMs);
+
+      return {
+        ok: true,
+        estado: true,
+        modo: 'automatico',
+        nuevoId: guardado.id,
+      };
+    }
   }
-}
 
-async toggleManual(id: number, estado: boolean) {
-  // Llama directamente a cambiarEstado con manual = true
-  return this.cambiarEstado({ psiculturaId: id, estado, manual: true });
-}
-
+  async toggleManual(id: number, estado: boolean) {
+    return this.cambiarEstado({ psiculturaId: id, estado, manual: true });
+  }
 
   async handleBrokerConnectionLost(id: number) {
     const registro = await this.psiculturaRepo.findOne({ where: { id } });
@@ -284,6 +290,9 @@ async toggleManual(id: number, estado: boolean) {
     registro.estadoActual = 'broker_down';
     registro.ultimaDesactivacion = new Date();
     await this.psiculturaRepo.save(registro);
+
+    this.publicarMQTT(id, { estado: false, modo: 'broker_down' });
+
     return { ok: true };
   }
 
@@ -294,6 +303,8 @@ async toggleManual(id: number, estado: boolean) {
     registro.estado = false;
     registro.estadoActual = 'inactivo';
     await this.psiculturaRepo.save(registro);
+
+    this.publicarMQTT(id, { estado: false, modo: 'inactivo' });
 
     if (registro.modo === 'auto') {
       await this.iniciarCicloAutomatico(id);
@@ -309,6 +320,9 @@ async toggleManual(id: number, estado: boolean) {
     registro.estadoActual = 'power_down';
     registro.ultimaDesactivacion = new Date();
     await this.psiculturaRepo.save(registro);
+
+    this.publicarMQTT(id, { estado: false, modo: 'power_down' });
+
     return { ok: true };
   }
 
@@ -317,6 +331,9 @@ async toggleManual(id: number, estado: boolean) {
     if (!registro) throw new HttpException('Registro no encontrado', 404);
     registro.estadoActual = 'power_restored_no_activity';
     await this.psiculturaRepo.save(registro);
+
+    this.publicarMQTT(id, { estado: registro.estado, modo: 'power_restored_no_activity' });
+
     return { ok: true };
   }
 }

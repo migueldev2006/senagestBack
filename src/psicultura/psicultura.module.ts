@@ -5,6 +5,7 @@ import { Psicultura } from './entities/psicultura.entity';
 import { Usuario } from 'src/usuarios/entities/usuario.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { PsiculturaService } from './psicultura.service';
+import { MqttModule } from 'src/mqtt/mqtt.module';
 
 
 @Module({
@@ -16,6 +17,7 @@ import { PsiculturaService } from './psicultura.service';
       Usuario,
       PsiculturaHistorial,
     ]),
+    MqttModule
   ],
   exports: [PsiculturaService, TypeOrmModule],
 })
