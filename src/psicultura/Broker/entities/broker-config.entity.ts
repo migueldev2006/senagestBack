@@ -11,13 +11,13 @@ export class BrokerConfig {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ nullable: true })
   name: string;
 
-  @Column()
+  @Column({ nullable: true })
   url: string;
 
-  @Column()
+  @Column({ nullable: true })
   port: number;
 
   @Column({ type: 'enum', enum: BrokerProtocol, default: BrokerProtocol.MQTT })

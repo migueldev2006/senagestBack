@@ -319,6 +319,8 @@ export class PsiculturaService implements OnModuleInit {
       }
       delete this.ciclos[key];
     }
+    // Desconectar del broker MQTT al cancelar ciclos
+    this.mqttService.disconnect();
   }
 
 async cambiarEstado(id: number, estado: boolean, manual = false) {

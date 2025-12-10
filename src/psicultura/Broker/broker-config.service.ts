@@ -5,10 +5,12 @@ import { BrokerConfig, BrokerProtocol } from "./entities/broker-config.entity";
 
 @Injectable()
 export class BrokerConfigService {
-  constructor(
-    @InjectRepository(BrokerConfig)
-    private repo: Repository<BrokerConfig>
-  ) {}
+constructor(
+  @InjectRepository(BrokerConfig)
+  private repo: Repository<BrokerConfig>,
+
+) {}
+
 
   async getAllConfigs(): Promise<BrokerConfig[]> {
     return this.repo.find();
@@ -130,7 +132,8 @@ export class BrokerConfigService {
     }
 
     try {
-      // Lógica de suscripción (se implementará en MqttService)
+      // Aquí se implementará la lógica real de suscripción usando MqttService
+      // Por ahora, marcar como suscrito
       await this.updateSubscriptionStatus(id, true);
       return { success: true, message: "Suscripción exitosa" };
     } catch (error) {

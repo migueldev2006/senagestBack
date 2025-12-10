@@ -6,7 +6,7 @@ import { Psicultura } from './entities/psicultura.entity';
 import { Usuario } from 'src/usuarios/entities/usuario.entity';
 import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { PsiculturaData } from './entities/psicultura-data.entity';
-import { MqttModule } from './Broker/broker-config.module';
+import { MqttModule } from '../mqtt/mqtt.module';
 
 
 @Module({

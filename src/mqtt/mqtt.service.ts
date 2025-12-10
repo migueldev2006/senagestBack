@@ -1,12 +1,16 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
 
 @Injectable()
 export class MqttService implements OnModuleInit {
-  publishSignals(arg0: boolean, arg1: boolean) {
-    throw new Error('Method not implemented.');
+  publishSignals(signal1: boolean, signal2: boolean) {
+    if (!this.TOPIC_SIGNALS) {
+      this.logger.warn('No hay tópico de señales configurado');
+      return;
+    }
+    this.publish(this.TOPIC_SIGNALS, { signal1, signal2 });
   }
   private readonly logger = new Logger(MqttService.name);
   private client: MqttClient | null = null;
@@ -36,9 +40,10 @@ export class MqttService implements OnModuleInit {
 
     // Datos que te proporcionaron
     this.HOST = cfg.url; // ej: 3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud
-    this.PORT = 8883;    // TLS MQTT
+    this.PORT = cfg.port || 8883;    // TLS MQTT
     this.USER = cfg.username;
     this.PASS = cfg.password;
+    this.TOPIC_SIGNALS = cfg.base_topic || 'signals';
 
     this.logger.log(`🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`);
 
@@ -99,6 +104,37 @@ export class MqttService implements OnModuleInit {
       return;
     }
     this.client.publish(topic, JSON.stringify(message));
+    this.logger.log(`📤 Publicado en ${topic}: ${JSON.stringify(message)}`);
+  }
+
+  subscribe(topic: string) {
+    if (!this.client?.connected) {
+      this.logger.warn('MQTT no conectado, no se puede suscribir.');
+      return;
+    }
+
+    this.client.subscribe(topic, (err) => {
+      if (err) {
+        this.logger.error(`Error suscribiéndose a ${topic}`, err.message);
+      } else {
+        this.logger.log(`📡 Suscrito a ${topic}`);
+      }
+    });
+  }
+
+  unsubscribe(topic: string) {
+    if (!this.client?.connected) {
+      this.logger.warn('MQTT no conectado, no se puede desuscribir.');
+      return;
+    }
+
+    this.client.unsubscribe(topic, (err) => {
+      if (err) {
+        this.logger.error(`Error desuscribiéndose de ${topic}`, err.message);
+      } else {
+        this.logger.log(`🚫 Desuscrito de ${topic}`);
+      }
+    });
   }
 
   async waitForConnection(timeout = 5000): Promise<void> {
