@@ -22,6 +22,12 @@ export class PsiculturaHistorial {
   @Column({ type: 'bigint', nullable: true })
   tiempoMs: number | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  ultimaActivacion: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  ultimaDesactivacion: Date;
+
   @Column({ type: 'timestamp' })
   inicio: Date;
 

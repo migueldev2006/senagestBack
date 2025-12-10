@@ -336,11 +336,11 @@ async function seed() {
 
     const PsiculturaDefault = await psiculturaRepo.save({});
     Object.assign( PsiculturaDefault, {
-      tiempoEncendido: '00:00:00',
+      tiempoEncendido: '00:00:50',
       tiempoApagado: '00:00:00',
       tiempoManualMs: null,
 
-      estado: true,
+      estado: false,
       estadoActual: 'inactivo',
       modo: 'auto',
 

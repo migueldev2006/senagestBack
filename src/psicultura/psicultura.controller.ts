@@ -52,7 +52,7 @@ export class PsiculturaController {
   ) {
     return this.service.cambiarEstado({
       psiculturaId: id,
-      estado: Boolean(body.activo),
+      estado: Boolean(body.estado),
       manual: Boolean(body.manual),
     });
   }
@@ -64,7 +64,7 @@ export class PsiculturaController {
   ) {
     return this.service.cambiarEstado({
       psiculturaId: id,
-      estado: Boolean(body.activo),
+      estado: Boolean(body.estado),
       manual: true,
     });
   }
