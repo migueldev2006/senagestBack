@@ -3,7 +3,9 @@ import { Psicultura } from "../../entities/psicultura.entity";
 
 export enum BrokerProtocol {
   MQTT = 'mqtt',
-  WEBSOCKETS = 'websockets'
+  MQTTS = 'mqtts',
+  WEBSOCKETS = 'ws',
+  WEBSOCKETS_SECURE = 'wss'
 }
 
 @Entity("broker_config")

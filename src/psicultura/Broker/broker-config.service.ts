@@ -1,15 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BrokerConfig, BrokerProtocol } from "./entities/broker-config.entity";
 
 @Injectable()
 export class BrokerConfigService {
-constructor(
-  @InjectRepository(BrokerConfig)
-  private repo: Repository<BrokerConfig>,
+  private readonly logger = new Logger(BrokerConfigService.name);
 
-) {}
+  constructor(
+    @InjectRepository(BrokerConfig)
+    private repo: Repository<BrokerConfig>,
+  ) {}
 
 
   async getAllConfigs(): Promise<BrokerConfig[]> {
@@ -133,10 +134,12 @@ constructor(
 
     try {
       // Aquí se implementará la lógica real de suscripción usando MqttService
-      // Por ahora, marcar como suscrito
+      // Por ahora, marcar como suscrito y loggear
+      this.logger.log(`📡 Suscripción solicitada para config ${id} en tópico ${config.base_topic || 'signals'}`);
       await this.updateSubscriptionStatus(id, true);
       return { success: true, message: "Suscripción exitosa" };
     } catch (error) {
+      this.logger.error(`Error al suscribirse para config ${id}`, error.message);
       await this.updateSubscriptionStatus(id, false);
       return { success: false, message: `Error en suscripción: ${error.message}` };
     }
@@ -154,9 +157,11 @@ constructor(
 
     try {
       // Lógica de publicación (se implementará en MqttService)
+      this.logger.log(`📤 Publicación solicitada para config ${id} en tópico ${topic} con mensaje: ${JSON.stringify(message)}`);
       await this.updatePublishingStatus(id, true);
       return { success: true, message: "Publicación exitosa" };
     } catch (error) {
+      this.logger.error(`Error al publicar para config ${id}`, error.message);
       await this.updatePublishingStatus(id, false);
       return { success: false, message: `Error en publicación: ${error.message}` };
     }

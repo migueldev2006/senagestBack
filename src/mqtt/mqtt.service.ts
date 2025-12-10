@@ -20,6 +20,7 @@ export class MqttService implements OnModuleInit {
   private USER = '';
   private PASS = '';
   private TOPIC_SIGNALS = '';
+  private PROTOCOL = '';
 
   constructor(
     private readonly configService: BrokerConfigService,
@@ -44,6 +45,7 @@ export class MqttService implements OnModuleInit {
     this.USER = cfg.username;
     this.PASS = cfg.password;
     this.TOPIC_SIGNALS = cfg.base_topic || 'signals';
+    this.PROTOCOL = cfg.protocol;
 
     this.logger.log(`🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`);
 
@@ -56,34 +58,70 @@ export class MqttService implements OnModuleInit {
       return;
     }
 
-    if (!this.HOST || !this.PORT || !this.USER || !this.PASS) {
+    if (!this.HOST || !this.PORT) {
       this.logger.warn('Configuración MQTT incompleta, no se conecta.');
       return;
     }
 
-    this.client = mqtt.connect({
+    const options: any = {
       host: this.HOST,
       port: this.PORT,
-      protocol: 'mqtts', // importante: usar mqtts para TLS
-      username: this.USER,
-      password: this.PASS,
+      protocol: this.PROTOCOL,
       reconnectPeriod: 2000,
       rejectUnauthorized: false, // si no tienes certificado válido
-    });
+    };
+
+    if (this.USER) options.username = this.USER;
+    if (this.PASS) options.password = this.PASS;
+
+    this.logger.log(`🔌 Intentando conectar a MQTT: ${this.PROTOCOL}://${this.HOST}:${this.PORT}${this.USER ? ` (usuario: ${this.USER})` : ' (sin autenticación)'}`);
+
+    this.client = mqtt.connect(options);
 
     this.client.on('connect', () => {
-      this.logger.log('✅ MQTT backend conectado');
+      this.logger.log(`✅ MQTT backend conectado exitosamente a ${this.PROTOCOL}://${this.HOST}:${this.PORT}`);
 
       if (this.TOPIC_SIGNALS) {
         this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-          if (err) this.logger.error('Error suscribiéndose a tópico', err.message);
-          else this.logger.log(`📡 Suscrito a ${this.TOPIC_SIGNALS}`);
+          if (err) this.logger.error(`❌ Error suscribiéndose a tópico ${this.TOPIC_SIGNALS}`, err.message);
+          else this.logger.log(`📡 Suscripción exitosa a tópico: ${this.TOPIC_SIGNALS}`);
         });
       }
     });
 
-    this.client.on('error', (err) => this.logger.error('MQTT error', err.message));
-    this.client.on('close', () => this.logger.warn('MQTT cerrado — esperando reconexión automática'));
+    this.client.on('reconnect', () => {
+      this.logger.warn('🔄 MQTT intentando reconectar...');
+    });
+
+    this.client.on('offline', () => {
+      this.logger.warn('📴 MQTT offline - sin conexión');
+    });
+
+    this.client.on('error', (err) => {
+      this.logger.error(`❌ Error MQTT: ${err.message}`, err);
+    });
+
+    this.client.on('close', () => {
+      this.logger.warn('🔌 MQTT conexión cerrada - esperando reconexión automática');
+    });
+
+    this.client.on('message', (topic, message, packet) => {
+      const messageStr = message.toString();
+      this.logger.log(`📨 Mensaje recibido en tópico '${topic}': ${messageStr}`);
+      this.logger.debug(`📦 Detalles del paquete: QoS=${packet.qos}, Retain=${packet.retain}, DUP=${packet.dup}`);
+    });
+
+    this.client.on('packetsend', (packet) => {
+      if (packet.cmd === 'publish') {
+        this.logger.debug(`📤 Enviando paquete PUBLISH a tópico: ${packet.topic}`);
+      }
+    });
+
+    this.client.on('packetreceive', (packet) => {
+      if (packet.cmd === 'publish') {
+        this.logger.debug(`📥 Recibiendo paquete PUBLISH del tópico: ${packet.topic}`);
+      }
+    });
   }
 
   disconnect() {
@@ -100,24 +138,35 @@ export class MqttService implements OnModuleInit {
 
   publish(topic: string, message: any) {
     if (!this.client?.connected) {
-      this.logger.warn('MQTT no conectado, no se puede publicar.');
+      this.logger.warn(`❌ MQTT no conectado, no se puede publicar en tópico '${topic}'`);
       return;
     }
-    this.client.publish(topic, JSON.stringify(message));
-    this.logger.log(`📤 Publicado en ${topic}: ${JSON.stringify(message)}`);
+
+    const messageStr = JSON.stringify(message);
+    this.logger.log(`📤 Publicando en tópico '${topic}': ${messageStr}`);
+
+    this.client.publish(topic, messageStr, (err) => {
+      if (err) {
+        this.logger.error(`❌ Error al publicar en tópico '${topic}': ${err.message}`, err);
+      } else {
+        this.logger.log(`✅ Mensaje publicado exitosamente en tópico '${topic}'`);
+      }
+    });
   }
 
   subscribe(topic: string) {
     if (!this.client?.connected) {
-      this.logger.warn('MQTT no conectado, no se puede suscribir.');
+      this.logger.warn(`❌ MQTT no conectado, no se puede suscribir a tópico '${topic}'`);
       return;
     }
 
+    this.logger.log(`📡 Intentando suscribirse a tópico: ${topic}`);
+
     this.client.subscribe(topic, (err) => {
       if (err) {
-        this.logger.error(`Error suscribiéndose a ${topic}`, err.message);
+        this.logger.error(`❌ Error suscribiéndose a tópico '${topic}': ${err.message}`, err);
       } else {
-        this.logger.log(`📡 Suscrito a ${topic}`);
+        this.logger.log(`✅ Suscripción exitosa a tópico: ${topic}`);
       }
     });
   }
