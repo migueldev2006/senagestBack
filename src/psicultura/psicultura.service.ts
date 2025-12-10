@@ -393,49 +393,22 @@ export class PsiculturaService implements OnModuleInit {
     return datos;
   }
 
-  async obtenerEstadisticas(psiculturaId: number, horas: number = 24) {
-    const registro = await this.psiculturaRepo.findOne({
-      where: { id: psiculturaId },
-    });
-    if (!registro) throw new HttpException('Registro no encontrado', 404);
 
-    const ahora = new Date();
-    const hace = new Date(ahora.getTime() - horas * 60 * 60 * 1000);
+  async guardarDatoDesdeBroker(data: any) {
+    if (!data.psiculturaId) return;
 
-    const datos = await this.dataRepo.find({
-      where: { psicultura: { id: psiculturaId } as any },
-      order: { fechaCreacion: 'DESC' },
+    const nuevo = this.dataRepo.create({
+      psicultura: { id: data.psiculturaId },
+      estado:data.estado,
+      topico:data.topico,
+      modo:data.modo,
+      fechaCreacion: new Date(),
     });
 
-    const filtrados = datos.filter((d) => d.fechaCreacion >= hace);
+    await this.dataRepo.save(nuevo);
 
-    if (filtrados.length === 0) {
-      return {
-        temperatura: null,
-        humedad: null,
-        oxigeno: null,
-        ph: null,
-        totalRegistros: 0,
-      };
-    }
-
-    const calcularStats = (valores: (number | null)[]) => {
-      const numeros = valores.filter((v) => v !== null) as number[];
-      if (numeros.length === 0) return null;
-      return {
-        promedio: numeros.reduce((a, b) => a + b, 0) / numeros.length,
-        minimo: Math.min(...numeros),
-        maximo: Math.max(...numeros),
-      };
-    };
-
-    return {
-      temperatura: calcularStats(filtrados.map((d) => d.temperatura)),
-      humedad: calcularStats(filtrados.map((d) => d.humedad)),
-      oxigeno: calcularStats(filtrados.map((d) => d.oxigeno)),
-      ph: calcularStats(filtrados.map((d) => d.ph)),
-      conductividad: calcularStats(filtrados.map((d) => d.conductividad)),
-      totalRegistros: filtrados.length,
-    };
+    this.logger.log(
+      `📥 Dato guardado desde broker para psicultura ${data.psiculturaId}`,
+    );
   }
 }

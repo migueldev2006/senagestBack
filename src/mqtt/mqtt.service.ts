@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
+import { PsiculturaService } from 'src/psicultura/psicultura.service';
 
 interface PendingMessage {
   topic: string;
@@ -69,23 +70,40 @@ export class MqttService implements OnModuleInit {
       rejectUnauthorized: false, // si no tienes certificado válido
     });
 
-    this.client.on('connect', () => {
-      this.logger.log('✅ MQTT backend conectado');
-      this.flushPendingMessages();
-
-      this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-        if (err)
-          this.logger.error('Error suscribiéndose a tópico', err.message);
-        else this.logger.log(`📡 Suscrito a ${this.TOPIC_SIGNALS}`);
-      });
+    this.client?.subscribe(['lab/diego/signals', 'psicultura/#'], (err) => {
+      if (err) this.logger.error('Error suscribiéndose a tópicos', err.message);
+      else this.logger.log(`📡 Suscrito a lab/diego/signals y psicultura/#`);
     });
 
-    this.client.on('error', (err) =>
-      this.logger.error('MQTT error', err.message),
-    );
-    this.client.on('close', () =>
-      this.logger.warn('MQTT cerrado — esperando reconexión automática'),
-    );
+    this.client.on('message', async (topic, message) => {
+      const msg = message.toString();
+      this.logger.log(`📨 MQTT recibido -> ${topic}: ${msg}`);
+
+      try {
+        const payload = JSON.parse(msg);
+
+        // Obtener el ID desde el tópico: psicultura/10/estado
+        const partes = topic.split('/');
+        const psiculturaId = Number(partes[1]);
+
+        // Crear objeto de datos completo
+        const data = {
+          ...payload,
+          psiculturaId,
+          topico: topic,
+        };
+
+        // Obtener servicio sin error
+        const psiculturaService = this.moduleRef.get(PsiculturaService, {
+          strict: false,
+        });
+
+        // Guardar en tabla psicultura_data
+        await psiculturaService.guardarDatoDesdeBroker(data);
+      } catch (e) {
+        this.logger.error(`❌ Error procesando mensaje MQTT: ${e.message}`);
+      }
+    });
   }
 
   disconnect() {
@@ -113,7 +131,7 @@ export class MqttService implements OnModuleInit {
 
     this.pendingMessages = [];
   }
-  
+
   async waitForConnection(timeout = 5000): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.client?.connected) return resolve();

@@ -89,19 +89,11 @@ export class PsiculturaController {
     return this.service.reportPowerRestore(id);
   }
 
-    @Get(':id/datos-guardados')
+    @Get('data/:id')
   obtenerDatosGuardados(
     @Param('id') id: number,
     @Query('limite') limite?: number,
   ) {
     return this.service.obtenerDatosGuardados(Number(id), limite || 100);
-  }
-
-  @Get(':id/estadisticas-datos')
-  obtenerEstadisticas(
-    @Param('id') id: number,
-    @Query('horas') horas?: number,
-  ) {
-    return this.service.obtenerEstadisticas(Number(id), horas || 24);
   }
 }
