@@ -10,11 +10,16 @@ import {
 import { PsiculturaService } from './psicultura.service';
 import { TimerDto } from './dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
+import { ValidarBrokerDto } from './dto/validar-broker.dto';
 
 @Controller('psicultura')
 export class PsiculturaController {
   constructor(private readonly service: PsiculturaService) {}
 
+  @Post('validar')
+  validarBroker(@Body() dto:ValidarBrokerDto){
+    return this.service.validarBroker(dto)
+  }
 
   @Post(':id/timer')
   actualizarTimer(

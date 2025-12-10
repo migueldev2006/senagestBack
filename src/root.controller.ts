@@ -45,26 +45,22 @@ export class RootController {
         ok: true,
         totalRegistros: datos.length,
         ultimoRegistro: datos[0] || null,
-        registrosPorTopico: {} as any,
-        registrosPorPsicultura: {} as any,
+        registrosPorTopico: {} as Record<string, number>,
+        registrosPorPsicultura: {} as Record<string, number>,
         datos: datos,
       };
 
       // Agrupar por tópico
-      datos.forEach((d) => {
-        if (!resumen.registrosPorTopico[d.topico]) {
-          resumen.registrosPorTopico[d.topico] = 0;
-        }
-        resumen.registrosPorTopico[d.topico]++;
-      });
+      // datos.forEach((d) => {
+      //   if (d.psicultura.topic) {
+      //     resumen.registrosPorTopico[d.psicultura.topic] = (resumen.registrosPorTopico[d.psicultura.topic] || 0) + 1;
+      //   }
+      // });
 
       // Agrupar por psicultura
       datos.forEach((d) => {
         const key = `${d.psicultura.id} - ${d.psicultura.estadoActual}`;
-        if (!resumen.registrosPorPsicultura[key]) {
-          resumen.registrosPorPsicultura[key] = 0;
-        }
-        resumen.registrosPorPsicultura[key]++;
+        resumen.registrosPorPsicultura[key] = (resumen.registrosPorPsicultura[key] || 0) + 1;
       });
 
       return resumen;

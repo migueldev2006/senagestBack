@@ -11,6 +11,8 @@ import { PsiculturaHistorial } from './entities/psicultura-historial.entity';
 import { TimerDto } from './dto';
 import { MqttService } from 'src/mqtt/mqtt.service';
 import { PsiculturaData } from './entities/psicultura-data.entity';
+import { ValidarBrokerDto } from './dto/validar-broker.dto';
+
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
@@ -45,6 +47,9 @@ export class PsiculturaService implements OnModuleInit {
     );
   }
 
+  async validarBroker(dto: ValidarBrokerDto) {
+    return {ok:true}
+  }
   async onModuleInit() {
     const ultimo = await this.psiculturaRepo.findOne({
       where: { modo: 'auto' },
@@ -397,7 +402,8 @@ export class PsiculturaService implements OnModuleInit {
   async guardarDatoDesdeBroker(data: any) {
     if (!data.psiculturaId) return;
 
-    const nuevo = this.dataRepo.create({
+    const nuevo = this.dataRepo.create();
+    Object.assign(nuevo, {
       psicultura: { id: data.psiculturaId },
       estado:data.estado,
       topico:data.topico,
