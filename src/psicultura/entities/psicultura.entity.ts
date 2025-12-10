@@ -12,19 +12,7 @@ import { PsiculturaHistorial } from './psicultura-historial.entity';
 @Entity('psicultura')
 export class Psicultura {
   @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  url: string;
-
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  usuario: string;
-
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  contrasena: string;
-
-  @Column({ type: 'text', nullable: true })
-  topic: string | null;
+  id:number
 
   @Column({ type: 'varchar', length: 8, default: '00:00:00' })
   tiempoEncendido: string;
@@ -35,7 +23,7 @@ export class Psicultura {
   @Column({ type: 'int', nullable: true })
   tiempoManualMs: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: true })
   estado: boolean;
 
   @Column({ type: 'varchar', length: 25, default: 'inactivo' })
@@ -59,6 +47,8 @@ export class Psicultura {
   @Column({ type: 'timestamp', nullable: true })
   fechaRestablecidaConexion: Date;
 
+
+  /** Energía eléctrica */
   @Column({ type: 'boolean', default: true })
   energiaEstable: boolean;
 
@@ -77,6 +67,7 @@ export class Psicultura {
   // relation to historial
   @OneToMany(() => PsiculturaHistorial, (h) => h.psicultura)
   historial: PsiculturaHistorial[];
+
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   fechaCreacion: Date;

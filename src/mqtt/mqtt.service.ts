@@ -2,6 +2,12 @@ import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/co
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
+import { PsiculturaService } from 'src/psicultura/psicultura.service';
+
+interface PendingMessage {
+  topic: string;
+  payload: any;
+}
 
 @Injectable()
 export class MqttService implements OnModuleInit {
@@ -47,8 +53,9 @@ export class MqttService implements OnModuleInit {
     this.TOPIC_SIGNALS = cfg.base_topic || 'signals';
     this.PROTOCOL = cfg.protocol;
 
-    this.logger.log(`🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`);
-
+    this.logger.log(
+      `🔄 Cargando nueva configuración MQTT: ${this.HOST}:${this.PORT}`,
+    );
     this.connect();
   }
 
@@ -186,11 +193,15 @@ export class MqttService implements OnModuleInit {
     });
   }
 
+
   async waitForConnection(timeout = 5000): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.client?.connected) return resolve();
 
-      const timer = setTimeout(() => reject(new Error('MQTT no se conectó a tiempo')), timeout);
+      const timer = setTimeout(
+        () => reject(new Error('MQTT no se conectó a tiempo')),
+        timeout,
+      );
 
       this.client?.once('connect', () => {
         clearTimeout(timer);

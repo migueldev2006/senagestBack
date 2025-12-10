@@ -51,11 +51,11 @@ export class RootController {
       };
 
       // Agrupar por tópico
-      datos.forEach((d) => {
-        if (d.psicultura.topic) {
-          resumen.registrosPorTopico[d.psicultura.topic] = (resumen.registrosPorTopico[d.psicultura.topic] || 0) + 1;
-        }
-      });
+      // datos.forEach((d) => {
+      //   if (d.psicultura.topic) {
+      //     resumen.registrosPorTopico[d.psicultura.topic] = (resumen.registrosPorTopico[d.psicultura.topic] || 0) + 1;
+      //   }
+      // });
 
       // Agrupar por psicultura
       datos.forEach((d) => {
