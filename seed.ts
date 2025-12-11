@@ -13,6 +13,7 @@ import { RutaFront } from './src/rutas/entities/ruta.entity';
 import { Usuario } from './src/usuarios/entities/usuario.entity';
 import { Psicultura } from './src/psicultura/entities/psicultura.entity';
 import { PsiculturaHistorial } from './src/psicultura/entities/psicultura-historial.entity';
+import { BrokerConfig } from './src/psicultura/Broker/entities/broker-config.entity';
 
 dotenv.config();
 
@@ -33,7 +34,8 @@ const AppDataSource = new DataSource({
     RutaFront,
     Programa,
     Psicultura,
-    PsiculturaHistorial
+    PsiculturaHistorial,
+    BrokerConfig
   ],
   synchronize: false,
 });
@@ -53,6 +55,7 @@ async function seed() {
     const rpRepo = AppDataSource.getRepository(RolPermiso);
     const usuarioRepo = AppDataSource.getRepository(Usuario);
     const psiculturaRepo = AppDataSource.getRepository(Psicultura);
+    const BokerRepo = AppDataSource.getRepository(BrokerConfig);
     const psiculturaHistorialRepo =
       AppDataSource.getRepository(PsiculturaHistorial);
 
