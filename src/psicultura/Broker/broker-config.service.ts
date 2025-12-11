@@ -131,6 +131,10 @@ export class BrokerConfigService {
     return this.repo.save(config);
   }
 
+  async getConfigById(id: number): Promise<BrokerConfig | null> {
+    return this.repo.findOne({ where: { id } });
+  }
+
   async getActiveConfig(): Promise<BrokerConfig | null> {
     return this.repo.findOne({ where: { is_active: true } });
   }

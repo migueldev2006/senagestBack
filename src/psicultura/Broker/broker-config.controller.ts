@@ -83,7 +83,15 @@ export class BrokerConfigController {
   // Suscribirse
   @Post('subscribe/:id')
   async subscribe(@Param('id') id: string) {
+    const config = await this.configService.getConfigById(Number(id));
+    if (!config) {
+      return { ok: false, message: 'Configuración no encontrada' };
+    }
+
     const result = await this.configService.subscribe(Number(id));
+    if (result.success) {
+      await this.mqttService.subscribe(config.base_topic || 'signals');
+    }
     return { ok: result.success, message: result.message };
   }
 
@@ -93,11 +101,19 @@ export class BrokerConfigController {
     @Param('id') id: string,
     @Body() body: { topic: string; message: any },
   ) {
+    const config = await this.configService.getConfigById(Number(id));
+    if (!config) {
+      return { ok: false, message: 'Configuración no encontrada' };
+    }
+
     const result = await this.configService.publish(
       Number(id),
       body.topic,
       body.message,
     );
+    if (result.success) {
+      await this.mqttService.publish(body.topic, body.message);
+    }
     return { ok: result.success, message: result.message };
   }
 
