@@ -37,38 +37,19 @@ export class PsiculturaService implements OnModuleInit {
     private readonly brokerConfigService: BrokerConfigService,
   ) {}
 
-  private async publicarMQTT(id: number, payload: any) {
-    // Publicar en tópicos internos para el frontend
-    this.mqttService.publish(`psicultura/${id}/estado`, payload);
-    this.mqttService.publish(`psicultura/${id}/historial`, payload);
-    this.logger.log(
-      `MQTT interno -> psicultura/${id}/estado: ${JSON.stringify(payload)}`,
-    );
-    this.logger.log(
-      `MQTT interno -> psicultura/${id}/historial: ${JSON.stringify(payload)}`,
-    );
+ private async publicarMQTT(id: number, payload: any) {
+  const activeConfig = await this.brokerConfigService.getActiveConfig();
+  if (!activeConfig) return;
 
-    // Publicar en tópico externo del broker si está configurado
-    try {
-      const activeConfig = await this.brokerConfigService.getActiveConfig();
-      if (activeConfig && activeConfig.base_topic) {
-        const externalPayload = {
-          id: id,
-          estado: payload.estado,
-          modo: payload.modo,
-          timestamp: new Date().toISOString(),
-        };
-        this.mqttService.publish(activeConfig.base_topic, externalPayload);
-        this.logger.log(
-          `📤 MQTT externo -> ${activeConfig.base_topic}: ${JSON.stringify(externalPayload)}`,
-        );
-      }
-    } catch (error) {
-      this.logger.warn(
-        `⚠️ Error publicando en tópico externo: ${error.message}`,
-      );
-    }
-  }
+  // Publicar solo al tópico externo de comandos
+  this.mqttService.publish('Picicultura/set', payload);
+
+  // Publicar también en internos para frontend
+  this.mqttService.publish(`psicultura/${id}/estado`, payload);
+  this.mqttService.publish(`psicultura/${id}/historial`, payload);
+}
+
+
 
   async validarBroker(dto: ValidarBrokerDto) {
     return { ok: true };
@@ -438,64 +419,59 @@ export class PsiculturaService implements OnModuleInit {
 async guardarDatoDesdeBroker(data: any) {
   if (!data.psiculturaId) {
     this.logger.warn(
-      `⚠️ Intento de guardar dato sin psiculturaId: ${JSON.stringify(data)}`,
+      `⚠️ Intento de guardar dato sin psiculturaId: ${JSON.stringify(data)}`
     );
     return;
   }
 
   try {
-    // 1️⃣ Obtener el último dato guardado previamente
+    // Normalizar estado a boolean
+    let estado = data.estado ?? data.status ?? data.State ?? data.state;
+    if (typeof estado === 'string') estado = estado.toLowerCase() === 'true';
+
+    // Obtener el último dato
     const ultimo = await this.dataRepo.findOne({
       where: { psicultura: { id: data.psiculturaId } as any },
       order: { fechaCreacion: 'DESC' },
     });
 
-    // 2️⃣ Validar si el estado es repetido
-    if (ultimo && ultimo.estado === data.estado) {
-      this.logger.log(
-        `⏭️ Estado repetido (${data.estado}) para psicultura ${data.psiculturaId}. No se guarda.`
-      );
-      return; // <<< NO GUARDAR NADA
-    }
+    const isNew = !ultimo;
 
+    // Solo guardar si es nuevo o cambia el estado
+    if (isNew || ultimo.estado !== estado) {
       const nuevo = this.dataRepo.create();
       Object.assign(nuevo, {
-      psicultura: { id: data.psiculturaId },
-      estado: data.estado,
-      topico: data.topico,
-      modo: data.modo,
-      fechaCreacion: new Date(),
-    });
-
-    await this.dataRepo.save(nuevo);
-
-    this.logger.log(
-      `📥 [EXTERNO] Dato guardado desde broker para psicultura ${data.psiculturaId} - Estado: ${data.estado}, Tópico: ${data.topico}, Modo: ${data.modo}`,
-    );
-
-    // 4️⃣ Toggle automático solo si el estado cambió realmente
-    if (typeof data.estado === 'boolean') {
-      this.logger.log(
-        `🔄 Ejecutando toggle automático para psicultura ${data.psiculturaId} al estado: ${data.estado}`,
-      );
-
-      await this.toggleManual(data.psiculturaId, data.estado);
+        psicultura: { id: data.psiculturaId },
+        estado,
+        topico: data.topico,
+        modo: data.modo ?? 'manual',
+        fechaCreacion: new Date(),
+      });
+      await this.dataRepo.save(nuevo);
 
       this.logger.log(
-        `✅ Toggle automático completado para psicultura ${data.psiculturaId}`,
+        `📥 Dato guardado para psicultura ${data.psiculturaId} - Estado: ${estado}, Tópico: ${data.topico}, Modo: ${data.modo}`
       );
+
+      // Hacer toggle manual solo si NO es un registro nuevo
+      if (!isNew) {
+        await this.toggleManual(data.psiculturaId, estado);
+        this.logger.log(
+          `🔄 Toggle automático completado para psicultura ${data.psiculturaId} al estado: ${estado}`
+        );
+      }
     } else {
-      this.logger.warn(
-        `⚠️ Estado recibido no es booleano, no se ejecuta toggle: ${data.estado} (tipo: ${typeof data.estado})`,
+      this.logger.log(
+        `⏭️ Estado repetido (${estado}) para psicultura ${data.psiculturaId}. No se guarda.`
       );
     }
-
   } catch (error) {
     this.logger.error(
       `❌ Error guardando dato desde broker para psicultura ${data.psiculturaId}: ${error.message}`,
-      error,
+      error
     );
   }
 }
+
 
 }

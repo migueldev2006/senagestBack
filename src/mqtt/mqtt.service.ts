@@ -99,7 +99,7 @@ export class MqttService implements OnModuleInit {
       );
 
       // Suscribirse a todos los topics configurados
-      await this.subscribeToAllConfiguredTopics();
+      await this.subscribeToConfiguredTopics();
     });
 
     this.client.on('reconnect', () => {
@@ -120,96 +120,57 @@ export class MqttService implements OnModuleInit {
       );
     });
 
-    this.client.on('message', async (topic, message, packet) => {
+this.client.on('message', async (topic, message) => {
       const messageStr = message.toString();
-      this.logger.log(
-        `📨 [EXTERNO] Mensaje recibido del broker en tópico '${topic}': ${messageStr}`,
-      );
-      this.logger.log(
-        `📊 Detalles: QoS=${packet.qos}, Retain=${packet.retain}, DUP=${packet.dup}, Timestamp=${new Date().toISOString()}`,
-      );
-
-      // Procesar el mensaje según el tópico
+      let parsedMessage: any;
       try {
-        const parsedMessage = JSON.parse(messageStr);
-        this.logger.log(
-          `🔍 Contenido parseado: ${JSON.stringify(parsedMessage, null, 2)}`,
-        );
-
-        // Si es un tópico de psicultura, guardar los datos
-        if (topic.startsWith('psicultura/') || topic.includes('Picicultura')) {
-          this.logger.log(
-            `🔄 Procesando mensaje para psicultura desde tópico ${topic}`,
-          );
-          const psiculturaService = this.moduleRef.get(PsiculturaService, {
-            strict: false,
-          });
-          // Handle estado field - could be boolean or string
-          let estado =
-            parsedMessage.status ??
-            parsedMessage.states ??
-            parsedMessage.estado;
-
-          if (typeof estado === 'string') {
-            estado = estado.toLowerCase() === 'true';
-          }
-
-          const dataToSave = {
-            psiculturaId: parsedMessage.id || parsedMessage.psiculturaId || 1, // Default to 1 if not specified
-            estado: estado, // Now properly handled as boolean
-            topico: topic,
-            modo: parsedMessage.modo || 'manual',
-          };
-          this.logger.log(`📋 Datos a guardar: ${JSON.stringify(dataToSave)}`);
-          await psiculturaService.guardarDatoDesdeBroker(dataToSave);
-          this.logger.log(
-            `💾 Datos guardados en base de datos para psicultura desde tópico ${topic}`,
-          );
-        }
-      } catch (error) {
-        this.logger.warn(
-          `⚠️ No se pudo parsear el mensaje como JSON: ${messageStr}`,
-        );
+        parsedMessage = JSON.parse(messageStr);
+      } catch {
+        this.logger.warn(`⚠ No se pudo parsear mensaje: ${messageStr}`);
+        return;
       }
-    });
 
-    this.client.on('packetsend', (packet) => {
-      if (packet.cmd === 'publish') {
-        this.logger.debug(
-          `📤 Enviando paquete PUBLISH a tópico: ${packet.topic}`,
-        );
-      }
-    });
+      // 🔹 Ignorar mensajes internos
+      if (parsedMessage.origen === 'interno') return;
 
-    this.client.on('packetreceive', (packet) => {
-      if (packet.cmd === 'publish') {
-        this.logger.debug(
-          `📥 Recibiendo paquete PUBLISH del tópico: ${packet.topic}`,
-        );
+      if (topic.startsWith('psicultura/') || topic.includes('Picicultura')) {
+        const psiculturaService = this.moduleRef.get(PsiculturaService, { strict: false });
+        const estado =
+          parsedMessage.status ?? parsedMessage.states ?? parsedMessage.estado;
+        const dataToSave = {
+          psiculturaId: parsedMessage.id || parsedMessage.psiculturaId || 1,
+          estado: typeof estado === 'string' ? estado.toLowerCase() === 'true' : estado,
+          topico: topic,
+          modo: parsedMessage.modo || 'manual',
+          origen: 'externo', // marcado como externo
+        };
+        await psiculturaService.guardarDatoDesdeBroker(dataToSave);
       }
     });
   }
 
-  private async subscribeToAllConfiguredTopics() {
-    const cfg = await this.configService.getActiveConfig();
-    if (!cfg || !cfg.subscribed_topics || cfg.subscribed_topics.length === 0) {
-      this.logger.log('📡 No hay topics configurados para suscribirse');
-      return;
-    }
+private async subscribeToConfiguredTopics() {
+  const cfg = await this.configService.getActiveConfig();
+  if (!cfg || !cfg.subscribed_topics?.length) {
+    this.logger.warn('⚠ No hay tópicos configurados para suscribirse');
+    return;
+  }
 
-    for (const topic of cfg.subscribed_topics) {
+  for (const topic of cfg.subscribed_topics) {
+    // Solo suscribirse a Picicultura/state
+    if (topic === 'Picicultura/state') {
       this.client?.subscribe(topic, (err) => {
         if (err) {
-          this.logger.error(
-            `❌ Error suscribiéndose a tópico ${topic}`,
-            err.message,
-          );
+          this.logger.error(`❌ Error suscribiéndose a ${topic}: ${err.message}`);
         } else {
-          this.logger.log(`📡 Suscripción exitosa a tópico: ${topic}`);
+          this.logger.log(`📡 Suscripción exitosa al tópico: ${topic}`);
         }
       });
     }
   }
+}
+
+
 
   disconnect() {
     if (this.client) {
