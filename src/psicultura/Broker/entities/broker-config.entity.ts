@@ -1,14 +1,14 @@
-import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from "typeorm";
-import { Psicultura } from "../../entities/psicultura.entity";
+import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { Psicultura } from '../../entities/psicultura.entity';
 
 export enum BrokerProtocol {
   MQTT = 'mqtt',
   MQTTS = 'mqtts',
   WEBSOCKETS = 'ws',
-  WEBSOCKETS_SECURE = 'wss'
+  WEBSOCKETS_SECURE = 'wss',
 }
 
-@Entity("broker_config")
+@Entity('broker_config')
 export class BrokerConfig {
   @PrimaryGeneratedColumn()
   id: number;
@@ -34,6 +34,12 @@ export class BrokerConfig {
   @Column({ nullable: true })
   base_topic: string;
 
+  @Column({ type: 'json', nullable: true })
+  subscribed_topics: string[];
+
+  @Column({ type: 'json', nullable: true })
+  published_topics: string[];
+
   @Column({ default: false })
   is_active: boolean;
 
@@ -46,10 +52,10 @@ export class BrokerConfig {
   @Column({ default: false })
   is_publishing: boolean;
 
-  @Column({ type: "timestamp", default: () => "NOW()" })
+  @Column({ type: 'timestamp', default: () => 'NOW()' })
   created_at: Date;
 
-  @Column({ type: "timestamp", default: () => "NOW()" })
+  @Column({ type: 'timestamp', default: () => 'NOW()' })
   updated_at: Date;
 
   @OneToMany(() => Psicultura, (psicultura) => psicultura.brokerConfig)

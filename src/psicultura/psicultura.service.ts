@@ -12,7 +12,7 @@ import { TimerDto } from './dto';
 import { MqttService } from 'src/mqtt/mqtt.service';
 import { PsiculturaData } from './entities/psicultura-data.entity';
 import { ValidarBrokerDto } from './dto/validar-broker.dto';
-
+import { BrokerConfigService } from './Broker/broker-config.service';
 
 @Injectable()
 export class PsiculturaService implements OnModuleInit {
@@ -34,21 +34,44 @@ export class PsiculturaService implements OnModuleInit {
     private readonly dataRepo: Repository<PsiculturaData>,
 
     private readonly mqttService: MqttService, // <-- inyectamos MQTT
+    private readonly brokerConfigService: BrokerConfigService,
   ) {}
 
-  private publicarMQTT(id: number, payload: any) {
+  private async publicarMQTT(id: number, payload: any) {
+    // Publicar en tópicos internos para el frontend
     this.mqttService.publish(`psicultura/${id}/estado`, payload);
-    this.mqttService.publish(`psicultura/${id}/histotial`, payload);
+    this.mqttService.publish(`psicultura/${id}/historial`, payload);
     this.logger.log(
-      `MQTT publicado -> psicultura/${id}/estado: ${JSON.stringify(payload)}`,
+      `MQTT interno -> psicultura/${id}/estado: ${JSON.stringify(payload)}`,
     );
     this.logger.log(
-      `MQTT publicado -> psicultura/${id}/historial: ${JSON.stringify(payload)}`,
+      `MQTT interno -> psicultura/${id}/historial: ${JSON.stringify(payload)}`,
     );
+
+    // Publicar en tópico externo del broker si está configurado
+    try {
+      const activeConfig = await this.brokerConfigService.getActiveConfig();
+      if (activeConfig && activeConfig.base_topic) {
+        const externalPayload = {
+          id: id,
+          estado: payload.estado,
+          modo: payload.modo,
+          timestamp: new Date().toISOString(),
+        };
+        this.mqttService.publish(activeConfig.base_topic, externalPayload);
+        this.logger.log(
+          `📤 MQTT externo -> ${activeConfig.base_topic}: ${JSON.stringify(externalPayload)}`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `⚠️ Error publicando en tópico externo: ${error.message}`,
+      );
+    }
   }
 
   async validarBroker(dto: ValidarBrokerDto) {
-    return {ok:true}
+    return { ok: true };
   }
   async onModuleInit() {
     const ultimo = await this.psiculturaRepo.findOne({
@@ -249,8 +272,13 @@ export class PsiculturaService implements OnModuleInit {
     });
     if (!registro) throw new HttpException('Psicultura no encontrada', 404);
 
-    // 1) Cancelar ciclos activos y cerrar historial abierto (tu lógica original)
-    this.cancelarTodosLosCiclos();
+    // 1) Cancelar ciclo específico y cerrar historial abierto
+    if (this.ciclos[psiculturaId]) {
+      const val = this.ciclos[psiculturaId];
+      if (Array.isArray(val)) val.forEach((t) => clearTimeout(t));
+      else clearTimeout(val as unknown as NodeJS.Timeout);
+      delete this.ciclos[psiculturaId];
+    }
 
     const historialAbierto = await this.historialRepo.findOne({
       where: { psicultura: { id: psiculturaId } as any, fin: IsNull() },
@@ -263,8 +291,17 @@ export class PsiculturaService implements OnModuleInit {
       await this.historialRepo.save(historialAbierto);
     }
 
-    // 2) Rama manual: registrar historial manual y actualizar SOLO campos necesarios del registro principal
+    // 2) Rama manual: registrar historial manual y actualizar el estado del registro
     if (manual) {
+      // Actualizar el estado del registro principal
+      registro.estado = estado;
+      registro.estadoActual = estado ? 'encendido_manual' : 'apagado_manual';
+      registro.ultimaActivacion = estado ? ahora : registro.ultimaActivacion;
+      registro.ultimaDesactivacion = estado
+        ? registro.ultimaDesactivacion
+        : ahora;
+      await this.psiculturaRepo.save(registro);
+
       // Crear historial manual (inicio ahora)
       const nuevoHistorial = this.historialRepo.create({
         psicultura: registro,
@@ -277,7 +314,7 @@ export class PsiculturaService implements OnModuleInit {
       });
       await this.historialRepo.save(nuevoHistorial);
 
-      // Publicar manteniendo registro.modo (no cambiamos modo)
+      // Publicar con el nuevo estado
       this.publicarMQTT(psiculturaId, { estado, modo: 'manual' });
 
       return { ok: true, estado };
@@ -398,23 +435,55 @@ export class PsiculturaService implements OnModuleInit {
     return datos;
   }
 
-
   async guardarDatoDesdeBroker(data: any) {
-    if (!data.psiculturaId) return;
+    if (!data.psiculturaId) {
+      this.logger.warn(
+        `⚠️ Intento de guardar dato sin psiculturaId: ${JSON.stringify(data)}`,
+      );
+      return;
+    }
 
-    const nuevo = this.dataRepo.create();
-    Object.assign(nuevo, {
-      psicultura: { id: data.psiculturaId },
-      estado:data.estado,
-      topico:data.topico,
-      modo:data.modo,
-      fechaCreacion: new Date(),
-    });
+    try {
+      const nuevo = this.dataRepo.create();
+      Object.assign(nuevo, {
+        psicultura: { id: data.psiculturaId },
+        estado: data.estado,
+        topico: data.topico,
+        modo: data.modo,
+        fechaCreacion: new Date(),
+      });
 
-    await this.dataRepo.save(nuevo);
+      await this.dataRepo.save(nuevo);
 
-    this.logger.log(
-      `📥 Dato guardado desde broker para psicultura ${data.psiculturaId}`,
-    );
+      this.logger.log(
+        `📥 [EXTERNO] Dato guardado desde broker para psicultura ${data.psiculturaId} - Estado: ${data.estado}, Tópico: ${data.topico}, Modo: ${data.modo}`,
+      );
+      this.logger.log(
+        `💾 Registro creado en PsiculturaData con ID: ${nuevo.id}`,
+      );
+
+      // Toggle automático basado en el estado recibido
+      this.logger.log(
+        `🔍 Datos recibidos para toggle: ${JSON.stringify(data)}`,
+      );
+      if (typeof data.estado === 'boolean') {
+        this.logger.log(
+          `🔄 Ejecutando toggle automático para psicultura ${data.psiculturaId} al estado: ${data.estado}`,
+        );
+        await this.toggleManual(data.psiculturaId, data.estado);
+        this.logger.log(
+          `✅ Toggle automático completado para psicultura ${data.psiculturaId}`,
+        );
+      } else {
+        this.logger.warn(
+          `⚠️ Estado recibido no es booleano, no se ejecuta toggle: ${data.estado} (tipo: ${typeof data.estado})`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `❌ Error guardando dato desde broker para psicultura ${data.psiculturaId}: ${error.message}`,
+        error,
+      );
+    }
   }
 }

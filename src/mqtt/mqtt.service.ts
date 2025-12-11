@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { BrokerConfigService } from '../psicultura/Broker/broker-config.service';
 import mqtt, { MqttClient } from 'mqtt';
 import { ModuleRef } from '@nestjs/core';
@@ -47,7 +53,7 @@ export class MqttService implements OnModuleInit {
 
     // Datos que te proporcionaron
     this.HOST = cfg.url; // ej: 3f187645294a400cbe2d87a2ec16ec53.s1.eu.hivemq.cloud
-    this.PORT = cfg.port || 8883;    // TLS MQTT
+    this.PORT = cfg.port || 8883; // TLS MQTT
     this.USER = cfg.username;
     this.PASS = cfg.password;
     this.TOPIC_SIGNALS = cfg.base_topic || 'signals';
@@ -81,17 +87,28 @@ export class MqttService implements OnModuleInit {
     if (this.USER) options.username = this.USER;
     if (this.PASS) options.password = this.PASS;
 
-    this.logger.log(`🔌 Intentando conectar a MQTT: ${this.PROTOCOL}://${this.HOST}:${this.PORT}${this.USER ? ` (usuario: ${this.USER})` : ' (sin autenticación)'}`);
+    this.logger.log(
+      `🔌 Intentando conectar a MQTT: ${this.PROTOCOL}://${this.HOST}:${this.PORT}${this.USER ? ` (usuario: ${this.USER})` : ' (sin autenticación)'}`,
+    );
 
     this.client = mqtt.connect(options);
 
     this.client.on('connect', () => {
-      this.logger.log(`✅ MQTT backend conectado exitosamente a ${this.PROTOCOL}://${this.HOST}:${this.PORT}`);
+      this.logger.log(
+        `✅ MQTT backend conectado exitosamente a ${this.PROTOCOL}://${this.HOST}:${this.PORT}`,
+      );
 
       if (this.TOPIC_SIGNALS) {
         this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-          if (err) this.logger.error(`❌ Error suscribiéndose a tópico ${this.TOPIC_SIGNALS}`, err.message);
-          else this.logger.log(`📡 Suscripción exitosa a tópico: ${this.TOPIC_SIGNALS}`);
+          if (err)
+            this.logger.error(
+              `❌ Error suscribiéndose a tópico ${this.TOPIC_SIGNALS}`,
+              err.message,
+            );
+          else
+            this.logger.log(
+              `📡 Suscripción exitosa a tópico: ${this.TOPIC_SIGNALS}`,
+            );
         });
       }
     });
@@ -109,24 +126,77 @@ export class MqttService implements OnModuleInit {
     });
 
     this.client.on('close', () => {
-      this.logger.warn('🔌 MQTT conexión cerrada - esperando reconexión automática');
+      this.logger.warn(
+        '🔌 MQTT conexión cerrada - esperando reconexión automática',
+      );
     });
 
-    this.client.on('message', (topic, message, packet) => {
+    this.client.on('message', async (topic, message, packet) => {
       const messageStr = message.toString();
-      this.logger.log(`📨 Mensaje recibido en tópico '${topic}': ${messageStr}`);
-      this.logger.debug(`📦 Detalles del paquete: QoS=${packet.qos}, Retain=${packet.retain}, DUP=${packet.dup}`);
+      this.logger.log(
+        `📨 [EXTERNO] Mensaje recibido del broker en tópico '${topic}': ${messageStr}`,
+      );
+      this.logger.log(
+        `📊 Detalles: QoS=${packet.qos}, Retain=${packet.retain}, DUP=${packet.dup}, Timestamp=${new Date().toISOString()}`,
+      );
+
+      // Procesar el mensaje según el tópico
+      try {
+        const parsedMessage = JSON.parse(messageStr);
+        this.logger.log(
+          `🔍 Contenido parseado: ${JSON.stringify(parsedMessage, null, 2)}`,
+        );
+
+        // Si es un tópico de psicultura, guardar los datos
+        if (topic.startsWith('psicultura/') || topic.includes('Picicultura')) {
+          this.logger.log(
+            `🔄 Procesando mensaje para psicultura desde tópico ${topic}`,
+          );
+          const psiculturaService = this.moduleRef.get(PsiculturaService, {
+            strict: false,
+          });
+          // Handle estado field - could be boolean or string
+          let estado =
+            parsedMessage.status ??
+            parsedMessage.states ??
+            parsedMessage.estado;
+
+          if (typeof estado === 'string') {
+            estado = estado.toLowerCase() === 'true';
+          }
+
+          const dataToSave = {
+            psiculturaId: parsedMessage.id || parsedMessage.psiculturaId || 1, // Default to 1 if not specified
+            estado: estado, // Now properly handled as boolean
+            topico: topic,
+            modo: parsedMessage.modo || 'manual',
+          };
+          this.logger.log(`📋 Datos a guardar: ${JSON.stringify(dataToSave)}`);
+          await psiculturaService.guardarDatoDesdeBroker(dataToSave);
+          this.logger.log(
+            `💾 Datos guardados en base de datos para psicultura desde tópico ${topic}`,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `⚠️ No se pudo parsear el mensaje como JSON: ${messageStr}`,
+        );
+      }
     });
 
     this.client.on('packetsend', (packet) => {
       if (packet.cmd === 'publish') {
-        this.logger.debug(`📤 Enviando paquete PUBLISH a tópico: ${packet.topic}`);
+        this.logger.debug(
+          `📤 Enviando paquete PUBLISH a tópico: ${packet.topic}`,
+        );
       }
     });
 
     this.client.on('packetreceive', (packet) => {
       if (packet.cmd === 'publish') {
-        this.logger.debug(`📥 Recibiendo paquete PUBLISH del tópico: ${packet.topic}`);
+        this.logger.debug(
+          `📥 Recibiendo paquete PUBLISH del tópico: ${packet.topic}`,
+        );
       }
     });
   }
@@ -145,7 +215,9 @@ export class MqttService implements OnModuleInit {
 
   publish(topic: string, message: any) {
     if (!this.client?.connected) {
-      this.logger.warn(`❌ MQTT no conectado, no se puede publicar en tópico '${topic}'`);
+      this.logger.warn(
+        `❌ MQTT no conectado, no se puede publicar en tópico '${topic}'`,
+      );
       return;
     }
 
@@ -154,16 +226,23 @@ export class MqttService implements OnModuleInit {
 
     this.client.publish(topic, messageStr, (err) => {
       if (err) {
-        this.logger.error(`❌ Error al publicar en tópico '${topic}': ${err.message}`, err);
+        this.logger.error(
+          `❌ Error al publicar en tópico '${topic}': ${err.message}`,
+          err,
+        );
       } else {
-        this.logger.log(`✅ Mensaje publicado exitosamente en tópico '${topic}'`);
+        this.logger.log(
+          `✅ Mensaje publicado exitosamente en tópico '${topic}'`,
+        );
       }
     });
   }
 
   subscribe(topic: string) {
     if (!this.client?.connected) {
-      this.logger.warn(`❌ MQTT no conectado, no se puede suscribir a tópico '${topic}'`);
+      this.logger.warn(
+        `❌ MQTT no conectado, no se puede suscribir a tópico '${topic}'`,
+      );
       return;
     }
 
@@ -171,7 +250,10 @@ export class MqttService implements OnModuleInit {
 
     this.client.subscribe(topic, (err) => {
       if (err) {
-        this.logger.error(`❌ Error suscribiéndose a tópico '${topic}': ${err.message}`, err);
+        this.logger.error(
+          `❌ Error suscribiéndose a tópico '${topic}': ${err.message}`,
+          err,
+        );
       } else {
         this.logger.log(`✅ Suscripción exitosa a tópico: ${topic}`);
       }
@@ -192,7 +274,6 @@ export class MqttService implements OnModuleInit {
       }
     });
   }
-
 
   async waitForConnection(timeout = 5000): Promise<void> {
     return new Promise((resolve, reject) => {
