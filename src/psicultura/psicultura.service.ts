@@ -295,7 +295,7 @@ export class PsiculturaService implements OnModuleInit {
     if (manual) {
       // Actualizar el estado del registro principal
       registro.estado = estado;
-      registro.estadoActual = estado ? 'encendido_manual' : 'apagado_manual';
+      registro.estadoActual = estado ? 'automatico' : 'inactivo';
       registro.ultimaActivacion = estado ? ahora : registro.ultimaActivacion;
       registro.ultimaDesactivacion = estado
         ? registro.ultimaDesactivacion
@@ -344,7 +344,7 @@ export class PsiculturaService implements OnModuleInit {
       });
       if (!r) return;
       r.estado = false;
-      r.estadoActual = 'automatico';
+      r.estadoActual = 'inactivo';
       r.ultimaDesactivacion = new Date();
       await this.psiculturaRepo.save(r);
 
@@ -435,55 +435,67 @@ export class PsiculturaService implements OnModuleInit {
     return datos;
   }
 
-  async guardarDatoDesdeBroker(data: any) {
-    if (!data.psiculturaId) {
-      this.logger.warn(
-        `⚠️ Intento de guardar dato sin psiculturaId: ${JSON.stringify(data)}`,
+async guardarDatoDesdeBroker(data: any) {
+  if (!data.psiculturaId) {
+    this.logger.warn(
+      `⚠️ Intento de guardar dato sin psiculturaId: ${JSON.stringify(data)}`,
+    );
+    return;
+  }
+
+  try {
+    // 1️⃣ Obtener el último dato guardado previamente
+    const ultimo = await this.dataRepo.findOne({
+      where: { psicultura: { id: data.psiculturaId } as any },
+      order: { fechaCreacion: 'DESC' },
+    });
+
+    // 2️⃣ Validar si el estado es repetido
+    if (ultimo && ultimo.estado === data.estado) {
+      this.logger.log(
+        `⏭️ Estado repetido (${data.estado}) para psicultura ${data.psiculturaId}. No se guarda.`
       );
-      return;
+      return; // <<< NO GUARDAR NADA
     }
 
-    try {
       const nuevo = this.dataRepo.create();
       Object.assign(nuevo, {
-        psicultura: { id: data.psiculturaId },
-        estado: data.estado,
-        topico: data.topico,
-        modo: data.modo,
-        fechaCreacion: new Date(),
-      });
+      psicultura: { id: data.psiculturaId },
+      estado: data.estado,
+      topico: data.topico,
+      modo: data.modo,
+      fechaCreacion: new Date(),
+    });
 
-      await this.dataRepo.save(nuevo);
+    await this.dataRepo.save(nuevo);
+
+    this.logger.log(
+      `📥 [EXTERNO] Dato guardado desde broker para psicultura ${data.psiculturaId} - Estado: ${data.estado}, Tópico: ${data.topico}, Modo: ${data.modo}`,
+    );
+
+    // 4️⃣ Toggle automático solo si el estado cambió realmente
+    if (typeof data.estado === 'boolean') {
+      this.logger.log(
+        `🔄 Ejecutando toggle automático para psicultura ${data.psiculturaId} al estado: ${data.estado}`,
+      );
+
+      await this.toggleManual(data.psiculturaId, data.estado);
 
       this.logger.log(
-        `📥 [EXTERNO] Dato guardado desde broker para psicultura ${data.psiculturaId} - Estado: ${data.estado}, Tópico: ${data.topico}, Modo: ${data.modo}`,
+        `✅ Toggle automático completado para psicultura ${data.psiculturaId}`,
       );
-      this.logger.log(
-        `💾 Registro creado en PsiculturaData con ID: ${nuevo.id}`,
-      );
-
-      // Toggle automático basado en el estado recibido
-      this.logger.log(
-        `🔍 Datos recibidos para toggle: ${JSON.stringify(data)}`,
-      );
-      if (typeof data.estado === 'boolean') {
-        this.logger.log(
-          `🔄 Ejecutando toggle automático para psicultura ${data.psiculturaId} al estado: ${data.estado}`,
-        );
-        await this.toggleManual(data.psiculturaId, data.estado);
-        this.logger.log(
-          `✅ Toggle automático completado para psicultura ${data.psiculturaId}`,
-        );
-      } else {
-        this.logger.warn(
-          `⚠️ Estado recibido no es booleano, no se ejecuta toggle: ${data.estado} (tipo: ${typeof data.estado})`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `❌ Error guardando dato desde broker para psicultura ${data.psiculturaId}: ${error.message}`,
-        error,
+    } else {
+      this.logger.warn(
+        `⚠️ Estado recibido no es booleano, no se ejecuta toggle: ${data.estado} (tipo: ${typeof data.estado})`,
       );
     }
+
+  } catch (error) {
+    this.logger.error(
+      `❌ Error guardando dato desde broker para psicultura ${data.psiculturaId}: ${error.message}`,
+      error,
+    );
   }
+}
+
 }
