@@ -90,7 +90,11 @@ export class BrokerConfigController {
 
     const result = await this.configService.subscribe(Number(id));
     if (result.success) {
-      await this.mqttService.subscribe(config.base_topic || 'signals');
+      // Suscribirse a todos los topics configurados
+      const topicsToSubscribe = config.subscribed_topics || [];
+      if (topicsToSubscribe.length > 0) {
+        await this.mqttService.subscribeToTopics(topicsToSubscribe);
+      }
     }
     return { ok: result.success, message: result.message };
   }
@@ -120,6 +124,16 @@ export class BrokerConfigController {
   // Desconectar
   @Post('disconnect/:id')
   async disconnect(@Param('id') id: string) {
+    const config = await this.configService.getConfigById(Number(id));
+    if (!config) {
+      return { ok: false, message: 'Configuración no encontrada' };
+    }
+
+    // Desuscribirse de todos los topics antes de desconectar
+    if (config.subscribed_topics && config.subscribed_topics.length > 0) {
+      await this.mqttService.unsubscribeFromTopics(config.subscribed_topics);
+    }
+
     const result = await this.configService.disconnect(Number(id));
     return { ok: result.success, message: result.message };
   }

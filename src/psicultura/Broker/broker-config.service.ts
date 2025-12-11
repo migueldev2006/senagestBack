@@ -341,7 +341,7 @@ export class BrokerConfigService {
         `📡 Suscripción solicitada para config ${id} en tópico ${topic}`,
       );
       await this.updateSubscriptionStatus(id, true);
-      // Agregar tópico a la lista de suscritos
+      // Agregar tópico a la lista de suscritos si no está ya incluido
       const currentTopics = config.subscribed_topics || [];
       if (!currentTopics.includes(topic)) {
         currentTopics.push(topic);
@@ -375,6 +375,13 @@ export class BrokerConfigService {
       return { success: false, message: 'Debe estar conectado para publicar' };
     }
 
+    if (config.is_subscribed) {
+      return {
+        success: false,
+        message: 'No se puede publicar mientras se está suscrito a tópicos',
+      };
+    }
+
     try {
       // Lógica de publicación (se implementará en MqttService)
       this.logger.log(
@@ -405,7 +412,12 @@ export class BrokerConfigService {
     }
 
     try {
-      // Lógica de desconexión (se implementará en MqttService)
+      // Desuscribirse de todos los topics antes de desconectar
+      if (config.subscribed_topics && config.subscribed_topics.length > 0) {
+        // Aquí se implementará la desuscripción en MqttService
+        this.logger.log(`🚫 Desuscripción de topics: ${config.subscribed_topics.join(', ')}`);
+      }
+
       await this.updateConnectionStatus(id, false);
       await this.updateSubscriptionStatus(id, false);
       await this.updatePublishingStatus(id, false);

@@ -93,24 +93,13 @@ export class MqttService implements OnModuleInit {
 
     this.client = mqtt.connect(options);
 
-    this.client.on('connect', () => {
+    this.client.on('connect', async () => {
       this.logger.log(
         `✅ MQTT backend conectado exitosamente a ${this.PROTOCOL}://${this.HOST}:${this.PORT}`,
       );
 
-      if (this.TOPIC_SIGNALS) {
-        this.client?.subscribe(this.TOPIC_SIGNALS, (err) => {
-          if (err)
-            this.logger.error(
-              `❌ Error suscribiéndose a tópico ${this.TOPIC_SIGNALS}`,
-              err.message,
-            );
-          else
-            this.logger.log(
-              `📡 Suscripción exitosa a tópico: ${this.TOPIC_SIGNALS}`,
-            );
-        });
-      }
+      // Suscribirse a todos los topics configurados
+      await this.subscribeToAllConfiguredTopics();
     });
 
     this.client.on('reconnect', () => {
@@ -201,6 +190,27 @@ export class MqttService implements OnModuleInit {
     });
   }
 
+  private async subscribeToAllConfiguredTopics() {
+    const cfg = await this.configService.getActiveConfig();
+    if (!cfg || !cfg.subscribed_topics || cfg.subscribed_topics.length === 0) {
+      this.logger.log('📡 No hay topics configurados para suscribirse');
+      return;
+    }
+
+    for (const topic of cfg.subscribed_topics) {
+      this.client?.subscribe(topic, (err) => {
+        if (err) {
+          this.logger.error(
+            `❌ Error suscribiéndose a tópico ${topic}`,
+            err.message,
+          );
+        } else {
+          this.logger.log(`📡 Suscripción exitosa a tópico: ${topic}`);
+        }
+      });
+    }
+  }
+
   disconnect() {
     if (this.client) {
       this.client.end();
@@ -257,6 +267,49 @@ export class MqttService implements OnModuleInit {
       } else {
         this.logger.log(`✅ Suscripción exitosa a tópico: ${topic}`);
       }
+    });
+  }
+
+  async subscribeToTopics(topics: string[]): Promise<void> {
+    if (!this.client?.connected) {
+      this.logger.warn('❌ MQTT no conectado, no se puede suscribir a tópicos');
+      return;
+    }
+
+    for (const topic of topics) {
+      this.subscribe(topic);
+    }
+  }
+
+  unsubscribeFromTopics(topics: string[]): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.client?.connected) {
+        this.logger.warn('❌ MQTT no conectado, no se puede desuscribir');
+        resolve();
+        return;
+      }
+
+      if (topics.length === 0) {
+        resolve();
+        return;
+      }
+
+      let completed = 0;
+      const total = topics.length;
+
+      topics.forEach(topic => {
+        this.client?.unsubscribe(topic, (err) => {
+          if (err) {
+            this.logger.error(`❌ Error desuscribiéndose de ${topic}`, err.message);
+          } else {
+            this.logger.log(`🚫 Desuscrito de ${topic}`);
+          }
+          completed++;
+          if (completed === total) {
+            resolve();
+          }
+        });
+      });
     });
   }
 
