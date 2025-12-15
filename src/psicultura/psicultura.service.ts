@@ -194,6 +194,7 @@ export class PsiculturaService implements OnModuleInit {
       tiempoApagado: dto.tiempoApagado ?? '00:00:00',
       estado: true,
       estadoActual: 'automatico',
+      fechaCreacion: new Date(),
       modo: 'auto',
       usuarios: { id: 1 },
     });
