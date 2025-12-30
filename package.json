@@ -17,7 +17,12 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "migration:create": "npx typeorm-ts-node-commonjs migration:create src/database/migrations/nueva-migracion",
+    "migration:generate": "npx typeorm-ts-node-commonjs migration:generate -d src/data-source.ts src/database/migrations/nueva-migracion",
+    "migration:run": "npx typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
+    "migration:revert": "npx typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
+    "seed":"npx ts-node seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -30,9 +35,11 @@
     "@nestjs/serve-static": "^5.0.3",
     "@nestjs/typeorm": "^11.0.0",
     "@types/bcrypt": "^5.0.2",
+    "axios": "^1.13.2",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "mqtt": "^5.14.1",
     "multer": "^1.4.5-lts.2",
     "nodemailer": "^7.0.3",
     "passport": "^0.7.0",
@@ -51,7 +58,6 @@
     "@nestjs/testing": "^11.0.1",
     "@swc/cli": "^0.6.0",
     "@swc/core": "^1.10.7",
-    "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.7",

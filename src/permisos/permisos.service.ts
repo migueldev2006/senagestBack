@@ -21,11 +21,19 @@ export class PermisosService {
   ) {}
 
   async createPermiso(data: CreatePermisoDto) {
+    const ruta = await this.rutaRepo.findOne({
+      where: { id: data.rutaId },
+    });
+    if (!ruta)
+      throw new HttpException('Ruta not found', HttpStatus.NOT_FOUND);
+
     const permiso = this.permisoRepo.create({
       ...data,
-      tipo: data.tipo as any,
+      ruta,
     });
+
     await this.permisoRepo.save(permiso);
+
     return {
       status: 201,
       message: 'Permiso created successfully',
@@ -34,28 +42,24 @@ export class PermisosService {
   }
 
   async getPermisos(id: number, page: number, search?: string) {
-    const records = 10;
-    const skip = (page - 1) * records;
-
     const modulo = await this.moduloRepo.findOne({
       where: { id },
-      relations: ['rutas', 'rutas.permisos'],
+      relations: ['rutas', 'rutas.permisos'], // <– FIX
     });
 
     if (!modulo)
-      throw new HttpException(
-        { status: 404, message: 'Modulo not found' },
-        HttpStatus.NOT_FOUND,
+      throw new HttpException('Modulo not found', HttpStatus.NOT_FOUND);
+
+    let permisos = modulo.rutas.flatMap((r) => r.permisos);
+
+    if (search) {
+      permisos = permisos.filter((p) =>
+        p.nombre.toLowerCase().includes(search.toLowerCase()),
       );
+    }
 
-    const permisos = modulo.rutas.flatMap((ruta) =>
-      ruta.permisos.filter((p) =>
-        search ? p.nombre.toLowerCase().includes(search.toLowerCase()) : true,
-      ),
-    );
-
-    const permisosCount = permisos.length;
-    const paginatedPermisos = permisos.slice(skip, skip + records);
+    const records = 10;
+    const start = (page - 1) * records;
 
     return {
       status: 200,
@@ -64,21 +68,25 @@ export class PermisosService {
         id: modulo.id,
         nombre: modulo.nombre,
         icono: modulo.icono,
-        permisos: paginatedPermisos,
+        permisos: permisos.slice(start, start + records),
       },
+      totalPages: Math.ceil(permisos.length / records),
       currentPage: page,
-      totalPages: Math.ceil(permisosCount / records),
     };
   }
 
   async updatePermiso(id: number, data: UpdatePermisoDto) {
-    await this.permisoRepo.update({ id }, { ...data, tipo: data.tipo as any });
-    const updatedPermiso = await this.permisoRepo.findOne({ where: { id } });
+    await this.permisoRepo.update({ id }, { ...data });
+
+    const updated = await this.permisoRepo.findOne({
+      where: { id },
+      relations: ['ruta'],
+    });
 
     return {
       status: 200,
       message: 'Permiso updated successfully',
-      data: updatedPermiso,
+      data: updated,
     };
   }
 
@@ -86,19 +94,15 @@ export class PermisosService {
     const permiso = await this.permisoRepo.findOne({ where: { id } });
 
     if (!permiso)
-      throw new HttpException(
-        { status: 404, message: 'Permiso not found' },
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException('Permiso not found', HttpStatus.NOT_FOUND);
 
-    await this.permisoRepo.update({ id }, { estado: !permiso.estado });
-
-    const updatedPermiso = await this.permisoRepo.findOne({ where: { id } });
+    permiso.estado = !permiso.estado;
+    await this.permisoRepo.save(permiso);
 
     return {
       status: 200,
-      message: 'status updated successfully',
-      data: updatedPermiso,
+      message: 'Status updated successfully',
+      data: permiso,
     };
   }
 }

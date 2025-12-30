@@ -20,6 +20,9 @@ export class RutaFront {
   @Column({ type: 'varchar', length: 255 })
   ruta: string;
 
+  @Column()
+  moduloId: number;
+
   @ManyToOne(() => Modulo, (modulo) => modulo.rutas, {
     onDelete: 'RESTRICT',
     onUpdate: 'CASCADE',

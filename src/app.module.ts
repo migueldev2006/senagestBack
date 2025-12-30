@@ -12,7 +12,10 @@ import { RutasModule } from './rutas/rutas.module';
 import { ConfigModule } from '@nestjs/config';
 import { FichasModule } from './fichas/fichas.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-
+import { PsiculturaModule } from './psicultura/psicultura.module';
+import { RootController } from './root.controller';
+import { PsiculturaData } from './psicultura/entities/psicultura-data.entity';
+import { MqttModule } from './mqtt/mqtt.module';
 console.log('🚀 Variables de entorno:');
 console.log('HOST:', process.env.HOST);
 console.log('DB_PORT:', process.env.DB_PORT);
@@ -34,13 +37,11 @@ console.log('PASSWORD:', process.env.PASSWORD);
       entities: [__dirname + '/**/*.entity.{ts,js}'],
       autoLoadEntities: true,
       synchronize:true,
+      migrationsRun:true,
       // dropSchema:true
     }),
-    
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
-      serveRoot: '/uploads',
-    }),
+    TypeOrmModule.forFeature([PsiculturaData]),
+
     AuthModule,
     UsuariosModule,
     ModulosModule,
@@ -50,6 +51,9 @@ console.log('PASSWORD:', process.env.PASSWORD);
     RolpermisoModule,
     RutasModule,
     FichasModule,
+    PsiculturaModule,
+    MqttModule
   ],
+  controllers: [RootController],
 })
 export class AppModule {}
