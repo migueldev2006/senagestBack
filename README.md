@@ -1,56 +1,55 @@
+## SENAGEST
 
-## Instrucciones
+### PASOS PARA EJECUTAR EL PROYECTO
 
-### 1. Instalar las dependencias
+### 1. Clonar el Repositorio
+
 ```bash
-    npm install
+    git clone https://github.com/migueldev2006/senagestBack.git
 ```
 
-### 2. Crear las variables de entorno
+### 2. Debemos acceder a la carpeta donde se encuentra nuestro frontend y ejecutar el siguiente comando para instalar las dependencias:
+
 ```bash
-    #SERVER
-        PORT = "puerto"
-    #JWT
-        JWT_SECRET = "secreto"
-        JWT_EXPIRATION = "expiracion"
-    #DATABASE
-        DATABASE_URL = "dsn"
-    #MAILER
-        MAILER_SERVICE = 'mailer'
-        MAILER_USER = 'account'
-        MAILER_PASS = 'password'
+    npm i 
+```
+### 3. Debemos crear las variables de entorno basandonos del enn.example el cual dejamos en el proyecto como base para crear el .env A continuacion dejo las variables:
+
+```bash
+      #SERVER
+      HOST='host'
+      PORT='puerto del backend'
+      DB_PORT='puerto de la base de dtos'
+      FRONTHOST='host del frontend'
+      FRONTPORT='puerto del frontend'
+
+      DB_USERNAME='nombre del gestor de la base de datos'
+      PASSWORD='contrasena'
+      #JWT
+      JWT_SECRET = "SECRETO JWT"
+      JWT_EXPIRATION = "1w"
+      #DATABASE
+      DATABASE=senagest
+      #MAILER
+      MAILER_SERVICE='servicio del email'
+      MAILER_USER='cuenta'
+      MAILER_PASS='contrasena del servicio de email'
 ```
 
-### 3. Sincronizar la base de datos
+### 4. Antes de ejecutar el pryecto debemos asegurarnos que nuestra base de datos ete activa y ejecutandose para ello Doker debe estar ejecutandose y desde la terminal debemos ejecutar el siguiente comando para crear y ejecutar nuetra base de datos:
+
 ```bash
-    npx prisma db push
+    docker compose up --build -d
 ```
 
-### 4. Correr el servidor
+### 5. Luego de verificada ejecutamos el siguiente comando para correr el bacekend del proyecto:
+
+
 ```bash
-    npm run start
+    npm run strat:dev
 ```
 
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+### Recordatorio
+Al proyecto no se le realizo la modificacion del dockerfile, por tanto al pasar a crear la imagen de docker es recomenadble revisar antes de ejecutar.
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+El proyecto solo se ejecuto en desarrollo.
